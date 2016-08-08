@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>NoFAQ</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+  <script type="text/javascript" src="{{url_for('static', filename='jquery.form.js') }}"></script>
+  <script>
+    const suggestionsPerPage = 3;
+      
+    var uniqueFixes = [];
+    var uniqueFixCount = 0;
+    var fixTextToRules = {};
+    var curPgOffset = 0;
+    var pageContents = [];
+    var voteButtonState = new Object();
+      
+    function resetSuggestionState(){
+        $('#none-helped-btn').prop('disabled', false);
+        $('#getSugBtnDiv').collapse('show');
+        $('#sugPanelDiv').collapse('hide');
+        $('#clearSugBtnDiv').collapse('hide');
+        $('#suggList').empty();
+        $('#sug-nav-btn-div').collapse('hide');
+        $('#sugAlertDiv').empty();
+    }
+      
+    function getFixesAndPopulate(panelDivId){
+        urlBase = "https://localhost";
+        //reqUrl = urlBase + "/reqFix.ajax?cmd=" + cmdTxt + "&err=" + errTxt;
+        reqUrl = urlBase + "/reqFix.ajax"
+        var voteButtonState = new Object();
+        $.post(reqUrl, function(data){            
+        //Group IDs by unique fix text - this way we show every unique fix. We map back to IDs, so
+        //we can upvote every rule that presented the desired fix
+        var uniqueFixes = [];
+        var uniqueFixCount = 0;
+        var fixTextToRules = {};            
+        for(var i = 0; i < data.length; i++){            
+            var curFixText = data[i]['fix'];
+            var curFixID = data[i]['id'];
+            if(uniqueFixes.indexOf(curFixText) < 0){
+                uniqueFixes[uniqueFixCount] = curFixText;
+                uniqueFixCount += 1;
+                fixTextToRules[curFixText] = [curFixID];
+            }
+            fixTextToRules[curFixText].push(curFixID);
+        }
+        
+        //Add a UI element for each unique fix suggestion.
+        for(var i = 0; i < uniqueFixCount; i++) {
+                var siID = 'sugItem' + i.toString();
+                var sugItem = '<li id="' + siID + '"  class="list-group-item suggestionItemClass"></li>';
+                $(panelDivId).find('#suggList').append(sugItem);
+            
+                var srID = 'sugRow' + i.toString();
+                var sugRow = '<div id="' + srID + '"  class="row"></div>';
+                $(panelDivId).find('#' + siID).append(sugRow);
+            
+                var item = uniqueFixes[i];
+                var ruleID = i;
+                $(panelDivId).find('#suggList').find('#' + siID).find('#' + srID).append('<p class="m-l-5">' + item + '</p>');
+                var voteBtn = '<button id="vote' + ruleID.toString() +'" type="button" class="btn btn-primary btn-sm pull-right m-r-5" data-toggle="button" aria-label="Approve"><span class="glyphicon glyphicon-thumbs-up" aria-hidden="true"></span></button>'
+                $(panelDivId).find('#suggList').find('#' + siID).find('#' + srID).append(voteBtn);
+                voteButtonState[ruleID.toString()] = false;
+                //TODO: Add new voting logic
+                $(panelDivId).find('#suggList').find('#' + siID).find('#' + srID).find('#vote' + ruleID.toString()).on('click', function(e){
+                    var idx = i;
+                    e.preventDefault()
+                    if(!voteButtonState[idx.toString()]){
+                        var voteURL = urlBase + "/upvote.ajax?id=" + ruleID.toString();
+                        $.ajax({url: voteURL});
+                        voteButtonState[idx.toString()] = true;
+                    }
+                });                
+            }
+            $(panelDivId).collapse('show');
+        });        
+    };    
+      
+    function populateSugPage(pgOffset){
+        var numPages = Math.floor(uniqueFixCount / suggestionsPerPage);
+        if(uniqueFixCount <= suggestionsPerPage){
+            $("#sug-nav-btn-div").collapse('hide');
+        }else{
+            $('#sug-nav-btn-div').collapse('show');
+            if(pgOffset === numPages){
+                $('#next-sug-page').addClass('disabled');
+                $('#next-sug-page').prop('disabled', true)
+            }
+            else{
+                $('#next-sug-page').removeClass('disabled');
+                $('#next-sug-page').prop('disabled', false);
+            }
+            if(pgOffset === 0){
+                $('#prev-sug-page').addClass('disabled');
+                $('#prev-sug-page').prop('disabled', true);
+            }else{
+                $('#prev-sug-page').removeClass('disabled');
+                $('#prev-sug-page').prop('disabled', false);
+            }
+        }
+        //Add a UI element for each suggestion on the first page.
+        var initialSugIdx = pgOffset * suggestionsPerPage;
+        for(var i = initialSugIdx; i < uniqueFixCount && i < initialSugIdx + suggestionsPerPage; i++) {
+                var siID = 'sugItem' + i.toString();
+                var sugItem = '<li id="' + siID + '"  class="list-group-item suggestionItemClass"></li>';
+                $('#suggList').append(sugItem);
+            
+                var srID = 'sugRow' + i.toString();
+                var sugRow = '<div id="' + srID + '"  class="row"></div>';
+                $('#suggList').find('#' + siID).append(sugRow);
+            
+                var item = uniqueFixes[i];
+                var ruleID = i;
+                $('#suggList').find('#' + siID).find('#' + srID).append(item);
+                var voteBtn = '<button id="vote' + ruleID.toString() +'" type="button" class="btn btn-primary btn-sm pull-right" data-toggle="button" aria-label="Approve"><span class="glyphicon glyphicon-thumbs-up" aria-hidden="true"></span></button>'
+                $('#suggList').find('#' + siID).find('#' + srID).append(voteBtn);
+                voteButtonState[ruleID.toString()] = false;
+                //TODO: Add new voting logic
+                $('#suggList').find('#' + siID).find('#' + srID).find('#vote' + ruleID.toString()).on('click', function(e){
+                    var idx = i;
+                    e.preventDefault()
+                    if(!voteButtonState[idx.toString()]){
+                        var voteURL = urlBase + "/upvote.ajax?id=" + ruleID.toString();
+                        $.ajax({url: voteURL});
+                        voteButtonState[idx.toString()] = true;
+                    }
+                });
+            
+                $('#getSugBtnDiv').collapse('hide');
+                $('#sugPanelDiv').collapse('show');
+                $('#clearSugBtnDiv').collapse('show');
+            }
+    }
+      
+    function populateSugPage2(pgOffset, panelDivID){
+        var numPages = Math.floor(uniqueFixCount / suggestionsPerPage);
+        if(uniqueFixCount <= suggestionsPerPage){
+            $("#ex-nav-btn-div").collapse('hide');
+        }else{
+            $('#ex-nav-btn-div').collapse('show');
+            if(pgOffset === numPages){
+                $('#next-ex-page').addClass('disabled');
+                $('#next-ex-page').prop('disabled', true)
+            }
+            else{
+                $('#next-ex-page').removeClass('disabled');
+                $('#next-ex-page').prop('disabled', false);
+            }
+            if(pgOffset === 0){
+                $('#prev-ex-page').addClass('disabled');
+                $('#prev-ex-page').prop('disabled', true);
+            }else{
+                $('#prev-ex-page').removeClass('disabled');
+                $('#prev-ex-page').prop('disabled', false);
+            }
+        }
+        //Add a UI element for each suggestion on the first page.
+        var initialSugIdx = pgOffset * suggestionsPerPage;
+        for(var i = initialSugIdx; i < uniqueFixCount && i < initialSugIdx + suggestionsPerPage; i++) {
+                var siID = 'sugItem' + i.toString();
+                var sugItem = '<li id="' + siID + '"  class="list-group-item suggestionItemClass"></li>';
+                $(panelDivID).find('#suggList').append(sugItem);
+            
+                var srID = 'sugRow' + i.toString();
+                var sugRow = '<div id="' + srID + '"  class="row"></div>';
+                $(panelDivID).find('#suggList').find('#' + siID).append(sugRow);
+            
+                var item = uniqueFixes[i];
+                var ruleID = i;
+                $(panelDivID).find('#suggList').find('#' + siID).find('#' + srID).append(item);
+                var voteBtn = '<button id="vote' + ruleID.toString() +'" type="button" class="btn btn-primary btn-sm pull-right" data-toggle="button" aria-label="Approve"><span class="glyphicon glyphicon-thumbs-up" aria-hidden="true"></span></button>'
+                $(panelDivID).find('#suggList').find('#' + siID).find('#' + srID).append(voteBtn);
+                voteButtonState[ruleID.toString()] = false;
+                //TODO: Add new voting logic
+                $(panelDivID).find('#suggList').find('#' + siID).find('#' + srID).find('#vote' + ruleID.toString()).on('click', function(e){
+                    var idx = i;
+                    e.preventDefault()
+                    if(!voteButtonState[idx.toString()]){
+                        var voteURL = urlBase + "/upvote.ajax?id=" + ruleID.toString();
+                        $.ajax({url: voteURL});
+                        voteButtonState[idx.toString()] = true;
+                    }
+                });            
+            }
+        $(panelDivID).collapse('show');
+    }
+    
+    function getRandomExample(){
+        //reqUrl = "exTest.json"
+        reqUrl = "https://localhost/getRandEx.ajax";
+        $.getJSON(reqUrl, function(data){
+            var cmdText = data["cmd"];
+            var errText = data["err"];
+            $('#cmd').val(cmdText);
+            $('#err').val(errText);
+            
+            fixUrl = "https://localhost/reqFix.ajax";
+            params = {cmd: cmdText, err: errText}
+            $.post(fixUrl, params, function(data){
+                //if there are no fixes, submit the invocation
+                if(data.length == 0){            
+                    var noneFoundDiv = '<div class="alert alert-info" role="alert">No suggestions found.</div>';            $('#sugAlertDiv').append(noneFoundDiv);
+                    submitInvocation();            
+                }
+                //Group IDs by unique fix text - this way we show every unique fix. We map back to IDs, so
+                //we can upvote every rule that presented the desired fix
+                uniqueFixes = [];
+                uniqueFixCount = 0;
+                fixTextToRules = {};
+                curPgOffset = 0;
+                voteButtonState = new Object();
+                for(var i = 0; i < data.length; i++){            
+                    var curFixText = data[i]['fix'];
+                    var curFixID = data[i]['id'];
+                    if(uniqueFixes.indexOf(curFixText) < 0){
+                        uniqueFixes[uniqueFixCount] = curFixText;
+                        uniqueFixCount += 1;
+                        fixTextToRules[curFixText] = [curFixID];
+                    }
+                    fixTextToRules[curFixText].push(curFixID);
+                }    
+                populateSugPage2(0,'#exPanelDiv');
+            }, 'json');
+          });
+    }
+      
+    function getRandomInvocation(){
+        reqUrl = "https://localhost/getOneUnfixed.ajax";
+        $.getJSON(reqUrl, function(data){
+            var cmdText = data["cmd"];
+            var errText = data["err"];
+            $('#cmd').val(cmdText);
+            $('#err').val(errText);
+        });
+    }
+      
+    function submitInvocation(){
+        var cmdText = $('#cmd').val();
+        var errText = $('#err').val();
+
+        $('input.cmdSub').val(cmdText);
+        $('input.errSub').val(errText);
+        $('input.fixSub').val('');
+        $('input.submit-fix').val('no');
+        $('form.repairData').ajaxForm({
+            url: 'https://localhost/submit.html',
+            dataType: 'json'
+        });
+        $('form.repairData').submit();
+    }
+    
+    function submitFixExample(){
+        var cmdText = $('#cmd').val();
+        var errText = $('#err').val();
+        var fixText = $('#fix').val();
+        $('input.cmdSub').val(cmdText);
+        $('input.errSub').val(errText);
+        $('input.fixSub').val(fixText);
+        $('input.submit-fix').val('yes');
+        $('form.repairData').ajaxForm({
+            url: 'https://localhost/submit.html',
+            dataType: 'json',
+            success: function (response){
+                var isNew = response['new'];
+                if(isNew){
+                    var exID = response['exampleID'];
+                    var urlBase = "https://localhost";
+                    var synthURL = urlBase + "/exSynth.ajax?id=" + exID + "&cmd=" + cmdText + "&err=" + errText + "&fix=" + fixText;
+                    $.ajax({url: synthURL});
+                }
+            }
+        });
+        $('form.repairData').submit();
+    }
+      
+    function disableCmdAndErr(){
+        $('#cmd').prop('disabled', true);
+        $('#err').prop('disabled', true);
+    }
+      
+    function enableCmdAndErr(){
+        $('#cmd').prop('disabled', false);
+        $('#err').prop('disabled', false);        
+    }
+      
+    function disableFix(){
+        $('#fix').prop('disabled', true);
+    }
+      
+    function enableFix(){
+        $('#fix').prop('disabled', false);
+    }
+  </script>
+
+  <link href='https://fonts.googleapis.com/css?family=Roboto' rel='stylesheet' type='text/css'>
+  <link href='https://fonts.googleapis.com/css?family=Inconsolata' rel='stylesheet' type='text/css'>
+    
+    <form class="repairData" method=post action="/submit.html">
+      <dl>
+	   {% block content %}
+	   {{ form.shell_type(class_="shell-type") }}
+            {{ form.command(class_="cmdSub")}}
+            {{ form.error(class_="errSub")}}
+	   {{ form.submit_fix(class_="submit-fix") }}
+            {{ form.fixForm(class_="fixSub")}}
+	   {% endblock %}
+      </dl>
+    </form>
+</head>
+<body>
+<div class="container">
+<div class="navbar navbar-default">
+    <p class='navbar-brand'>NoFAQ</p>
+    <p class='navbar-text'>A tool that learns to repair your command line mistakes</p>
+</div>
+<div class="btn-group" role="group" data-toggle="buttons" aria-label="usage options">    
+    <label class="btn btn-primary active">
+        <input type="radio" name="options" id="req" autocomplete="off" checked>
+        Request a fix 
+        <span class="glyphicon glyphicon-wrench" aria-hidden="true"></span>
+    </label>
+    <label class="btn btn-primary">
+        <input type="radio" name="options" id="helpUs" autocomplete="off">
+        Help fix commands
+        <span class="glyphicon glyphicon-console"></span>
+    </label>
+    
+    <label class="btn btn-primary">
+        <input type="radio" name="options" id="rand" autocomplete="off">
+        See a random example
+        <span class="glyphicon glyphicon-random"></span>
+    </label>
+</div>
+<script>
+    var reqState = 'req';
+    var helpState = 'help';
+    var randState = 'rand';
+    var curState = reqState;
+    $('.btn-primary').on('click', function(){
+        var btnId = $(this).find('input').attr('id');
+        if(btnId === "req" && curState != reqState){
+            curState = reqState;
+            $('#err').prop('placeholder','Enter your error message (if any) here');
+            resetSuggestionState();
+            $('#fixDiv').collapse('hide');
+            $('#suggestionsDiv').collapse('show'); 
+            $('#help-us-div').collapse('hide');
+            $('#random-example-div').collapse('hide');
+            enableCmdAndErr();
+            enableFix();
+            $('#cmd').val('');
+            $('#err').val('');
+            $('#fix').val('');
+        }
+        });
+    $('.btn-primary').on('click', function(){
+        var btnId = $(this).find('input').attr('id');
+        if(btnId === "helpUs" && curState != helpState){
+            curState = helpState;
+            $('#err').prop('placeholder', '');
+            $('#fixDiv').collapse('show');
+            $('#suggestionsDiv').collapse('hide');
+            $('#help-us-div').collapse('show');
+            $('#random-example-div').collapse('hide');
+            $('#subBtnDiv').collapse('hide');
+            $('#fix').val('');
+            getRandomInvocation();
+            disableCmdAndErr();
+            enableFix();            
+        }
+    });
+    $('.btn-primary').on('click', function(){
+        var btnId = $(this).find('input').attr('id');
+        if(btnId == "rand" && curState != randState){
+            curState = randState;
+            $('#err').prop('placeholder','');
+            $('#fixDiv').collapse('hide');
+            $('#suggestionsDiv').collapse('hide');
+            $('#help-us-div').collapse('hide');
+            $('#random-example-div').collapse('show');
+            $('#subBtnDiv').collapse('hide');
+            $('#exPanelDiv').find('#suggList').empty();
+            
+            disableCmdAndErr();
+            disableFix();
+            getRandomExample();
+        }
+    });
+</script>
+    
+<div id="invocationDiv">
+    <textarea id="cmd" class="form-control" placeholder="Enter your command here" rows="6" aria-describedby="command"></textarea>
+    <textarea id="err" class="form-control" placeholder="Enter your error message (if any) here" rows="6" aria-describedby="error">
+</textarea> 
+</div>
+<div id="fixDiv" class="collapse">
+    <textarea id="fix" class="form-control" placeholder="Enter the repaired command here" rows="6" aria-describedby="fix"></textarea>
+</div>
+<script>
+    var changed = false;
+    $('#subBtn').prop('disabled', true);
+    var changeHandler = function(){
+        if($('#cmd').val() != "" && $('#fix').val() != ""){
+            changed = true;
+            $('#subBtn').prop('disabled', false);
+            $('#subFixBtn').prop('disabled', false);
+        }else{
+            changed = false;
+            $('#subBtn').prop('disabled', true);
+            $('#subFixBtn').prop('disabled', true);
+        }
+    };
+    
+    textChangeEvents = 'change keyup paste';
+    $('#cmd').on(textChangeEvents, changeHandler);
+    $('#err').on(textChangeEvents, changeHandler);
+    $('#fix').on(textChangeEvents, changeHandler);
+</script>
+    
+<div id="suggestionsDiv" class="collapse in">
+    <div id="getSugBtnDiv" class="collapse in">
+        <button id="getSugBtn" type="button" class="btn btn-default" aria-label="Get Suggestions">
+            Get Suggestions
+        </button>
+    </div>
+    
+    <div id="clearSugBtnDiv" class="collapse clearfix">
+        <button id="clearSugBtn" type="button" class="btn btn-default pull-left" aria-label="Clear Suggestions and Start Again?">Clear Suggestions and Start Again?</button>
+        
+        <button id="none-helped-btn" type="button" class="btn btn-default pull-right" aria-label="None helped">None of these helped.</button>
+    </div>
+    
+    <div id="sugPanelDiv" class="collapse">
+        <div id="outputSuggestions" class="panel panel-default">
+        <div class="panel-heading">Suggested Fixes</div>
+            <ul id="suggList" class="list-group">
+                
+            </ul>
+        </div>
+    </div>
+    <div id="sug-nav-btn-div" class="collapse">
+        <nav aria-label="...">
+            <ul class="pager">
+                <li id="prev-sug-page" class="previous"><a  href="#">Previous</a></li>
+                <li id="next-sug-page" class="next"><a href="#">Next</a></li>
+            </ul>
+        </nav>
+    </div>
+    <div id="sugAlertDiv">
+        
+    </div>
+</div>
+<script>
+    $('#none-helped-btn').on('click', function(){
+        var reqAlert = '<div class="alert alert-success" role="alert">Request for fix submitted.</div>'
+        $('#sugAlertDiv').append(reqAlert);
+        submitInvocation();
+        $('#none-helped-btn').prop('disabled', true);
+    });
+    $('#prev-sug-page').on('click', function(e){
+        if(!$(this).prop('disabled')){
+            curPgOffset = curPgOffset - 1;
+            $('#suggList').empty();
+            populateSugPage(curPgOffset);
+        }else{
+            e.preventDefault();
+        }
+        
+    });
+    $('#next-sug-page').on('click', function(e){
+        if(!$(this).prop('disabled')){
+            curPgOffset = curPgOffset + 1;
+            $('#suggList').empty();
+            populateSugPage(curPgOffset);
+        }else{
+            e.preventDefault();
+        }
+    });
+    
+    $('#getSugBtn').on('click', function(){
+        $('#cmd').prop('disabled', true);
+        $('#err').prop('disabled', true);
+        $('#sugAlertDiv').empty();
+        var cmdTxt = $('#cmd').val();
+        var errTxt = $('#err').val();
+        urlBase = "https://localhost";
+        //reqUrl = urlBase + "/reqFix.ajax?cmd=" + cmdTxt + "&err=" + errTxt;
+        reqUrl = urlBase + "/reqFix.ajax"
+        params = {cmd: cmdTxt, err: errTxt};
+        $.post(reqUrl, params, function(data){
+        //if there are no fixes, submit the invocation
+        if(data.length == 0){            
+            var noneFoundDiv = '<div class="alert alert-info" role="alert">No suggestions found.</div>';            $('#sugAlertDiv').append(noneFoundDiv);
+            submitInvocation();            
+        }
+        //Group IDs by unique fix text - this way we show every unique fix. We map back to IDs, so
+        //we can upvote every rule that presented the desired fix
+        uniqueFixes = [];
+        uniqueFixCount = 0;
+        fixTextToRules = {};
+        voteButtonState = new Object();
+        for(var i = 0; i < data.length; i++){            
+            var curFixText = data[i]['fix'];
+            var curFixID = data[i]['id'];
+            if(uniqueFixes.indexOf(curFixText) < 0){
+                uniqueFixes[uniqueFixCount] = curFixText;
+                uniqueFixCount += 1;
+                fixTextToRules[curFixText] = [curFixID];
+            }
+            fixTextToRules[curFixText].push(curFixID);
+        }        
+        populateSugPage(0);
+        }, 'json');        
+    });
+    $('#clearSugBtn').on('click', function(){
+        $('#cmd').prop('disabled', false);
+        $('#err').prop('disabled', false);
+        resetSuggestionState();
+    });
+</script>
+<div id="help-us-div" class="collapse">
+    <button id="subFixBtn" type="button" class="btn btn-default" aria-label="Get another example">
+            Submit Fix
+    </button>
+    <button id="showNewBtn" type="button" class="btn btn-default" aria-label="Show a different error">
+        Give me a different command.
+    </button>
+</div>
+<script>
+    $('#subFixBtn').on('click', function(){
+        if(changed){
+            changed = true;
+            $('#subFixBtn').prop('disabled', true);
+            $('#subBtn').prop('disabled', true);
+            submitFixExample();
+        }
+    });
+    $('#showNewBtn').on('click', function(){
+        changed = false;
+        $('#subFixBtn').prop('disabled', true);
+        $('#subBtn').prop('disabled', true);
+        getRandomInvocation();
+    });
+</script>   
+    
+<div id="random-example-div" class="collapse">
+    <button id="getNewExBtn" type="button" class="btn btn-default" aria-label="Get another example">
+            Show me another!
+    </button>
+    <div id="exPanelDiv" class="collapse">
+        <div id="outputSuggestions" class="panel panel-default">
+            <div class="panel-heading">Suggested Fixes</div>
+            <ul id="suggList" class="list-group">     </ul>
+        </div>
+    </div>
+    <div id="ex-nav-btn-div" class="collapse">
+        <nav aria-label="...">
+            <ul class="pager">
+                <li id="prev-ex-page" class="previous"><a  href="#">Previous</a></li>
+                <li id="next-ex-page" class="next"><a href="#">Next</a></li>
+            </ul>
+        </nav>
+    </div>
+</div>
+<script>
+    $('#prev-ex-page').on('click', function(e){
+        if(!$(this).prop('disabled')){
+            curPgOffset = curPgOffset - 1;
+            $('#exPanelDiv').find('#suggList').empty();
+            populateSugPage2(curPgOffset, '#exPanelDiv');
+        }else{
+            e.preventDefault();
+        }
+        
+    });
+    $('#next-ex-page').on('click', function(e){
+        if(!$(this).prop('disabled')){
+            curPgOffset = curPgOffset + 1;
+            $('#exPanelDiv').find('#suggList').empty();
+            populateSugPage2(curPgOffset, '#exPanelDiv');
+        }else{
+            e.preventDefault();
+        }
+    });
+    $('#getNewExBtn').on('click', function(){
+        $('#exPanelDiv').find('#suggList').empty();
+        getRandomExample();
+    });
+</script>
+</div>
+</body>
+
+<style>
+    :root{
+        --header-color: #B9D6E2;
+        --color-1: #5F696D;
+        --color-2: #46464B;
+        --color-3: #84A2A4;
+        --color-3L: #a7bcbe;
+        --text-font-family: roboto;
+        --console-font-family: inconsolata;
+        --name-font-size: 36px
+    }
+    body {background-color: var(--color-1)}
+    textarea.form-control {background-color: black;
+                           color: white;
+                           font-family: var(--console-font-family);
+                           outline: none;
+                           padding: .0em;
+                           margin-top: .5em;
+                           }
+    div.jumbotron {background-color: var(--header-color);
+                    color: var(--color-2)}
+    .list-group-item {background-color: var(--header-color);
+                      border-color: var(--color-2);
+                      font-family: var(--console-font-family);}
+    .panel-heading {background-color: var(--color-2) !important;
+                    color:white !important;
+                    border-color: var(--color-2) !important;
+                    border-collapse: inherit !important;
+                    font-family: var(--text-font-family);}
+                        
+    .panel {border-color: var(--color-2) !important}
+    .btn-default {background-color: var(--color-3);
+                border-color: var(--color-1);}
+    .btn {font-family: var(--text-font-family);}
+    .btn-default:hover{
+        background-color: var(--color-3L);
+    }
+    .navbar{background-color: var(--header-color);
+            border-color: var(--header-color);
+            }
+    .navbar-default .navbar-brand{font-size: var(--name-font-size);
+                  font-weight: bold;
+                  color: var(--color-2);
+    }
+    .navbar-text{
+        
+    }
+    textarea[disabled]{
+        background-color: black !important;
+    }
+                                                 
+</style>
+</html>

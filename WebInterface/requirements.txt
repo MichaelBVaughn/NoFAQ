@@ -1,0 +1,14 @@
+dominate==2.2.0
+Flask==0.10.1
+Flask-Bootstrap==3.3.5.7
+gunicorn==19.4.5
+itsdangerous==0.24
+Jinja2==2.8
+MarkupSafe==0.23
+peewee==2.8.0
+PyMySQL==0.7.2
+virtualenv==15.0.1
+visitor==0.1.2
+Werkzeug==0.11.4
+WTForms==2.1
+psycopg2==2.6.1

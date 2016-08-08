@@ -1,0 +1,6 @@
+DROP PROCEDURE IF EXISTS getNumRepairExamples;
+DELIMITER $$
+CREATE PROCEDURE getNumRepairExamples(OUT numEx INT)
+BEGIN
+	SELECT COUNT(*) INTO numEx FROM repairexample;
+END	
