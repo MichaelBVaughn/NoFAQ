@@ -13,6 +13,9 @@ let getUpdatedPrefixAndSuffix newToken pref  suf =
 //More consolidation of duplicated code - get the longest prefix and suffix shared by tokenA and tokenB
 let getSharedPrefAndSuf tokenA tokenB = getUpdatedPrefixAndSuffix tokenA tokenB tokenB
 
+//Get prefix and suffix shared by a list of strings
+let getListPrefAndSuf (hd::tl) = List.fold (fun (pref, suf) str -> getUpdatedPrefixAndSuffix str pref suf) (hd,hd) (hd::tl)
+
 //--------Variable Equality--------
 //Logic for equal variables in cmd/err
 
@@ -52,8 +55,7 @@ let promoteVarEq truePos eqPos (newVal::prevVals) exprList varMap =
                                       match expr with
                                       | Var(pos, pref, suf, _) -> Some (pref, suf)
                                       | _ -> None) in
-              let (origPref, origSuf) = List.pick (prefSufAtPos eqPos) exprList in
-              let (pref, suf) = getUpdatedPrefixAndSuffix newVal origPref origSuf in
+              let (pref, suf) = getListPrefAndSuf varAss
               let promoted = Var(truePos, pref, suf, varAss) in
               let updatedVarMap = Map.add (eqPos,newVal) truePos varMap in 
               (promoted, varAss, updatedVarMap, true)                                                      
@@ -87,7 +89,7 @@ let rec matchExprListWithSymStr (ruleMatch:Expr list) (cmd:SymbString) (currInde
                      (promoted::cmdMatch, updatedEnv , newVarMap, updatedVarMap)
     | (Var(id, prefix, suffix, strlist)::t1, str2::t2) -> 
                         let (cmdMatch,env, newVarMap, varMap) = matchExprListWithSymStr t1 t2 (currIndex+1) prevTotExamples baseNewVarMap baseVarMap in
-                        let (commonPrefix, commonSuffix) = getUpdatedPrefixAndSuffix str2 prefix suffix                       
+                        let (commonPrefix, commonSuffix) = getUpdatedPrefixAndSuffix str2 prefix suffix                   
                         let varAss = str2::strlist in
                            (Var(id, commonPrefix, commonSuffix, varAss)::cmdMatch, (id,varAss, false)::env, newVarMap, varMap)
     | _ -> raise (System.ArgumentException("Lists don't have the same length"))

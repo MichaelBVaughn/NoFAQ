@@ -13,6 +13,7 @@ open database
 open Nessos.FsPickler.Combinators
 
 
+
 // cd {1}, "no such file or directory" -> mkdir {1}; cd {1}
 // java {1}, "could not find or locate class" --> java substr(1,-4, {1})
 //let r = FixRule(CmdParams([ConstStr("java"); Var(0)]), 
@@ -409,7 +410,7 @@ let tryAddEx id cmd err fix =
     "Ok"
 
 let tryGetUnfixed () =
-    let invPair = getUnfixedExample() in
+    let invPair = getPresentableExample() in
     let invAssoc = Map.ofList ["cmd", fst invPair; "err", snd invPair] in
     JsonConvert.SerializeObject invAssoc
 

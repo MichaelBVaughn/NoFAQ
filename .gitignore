@@ -3,3 +3,5 @@
 ################################################################################
 
 /Synthesis/RuleRepair/obj/Debug
+/Synthesis/packages
+/Synthesis/RuleRepair/bin/Debug

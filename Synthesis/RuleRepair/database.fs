@@ -5,7 +5,7 @@ open System.Data
 open FSharp.Data.Sql
 
 [<Literal>]
-let connString = "Server=localhost;Port=80;Database=databasename;User=user;Password=password;"
+let connString = ""
 
 
 [<Literal>]
@@ -181,3 +181,20 @@ let getUnfixedExample () =
     let idx = randomDbIdx count in
     let res = ctx.Procedures.GetUnfixedInvocation.Invoke(idx) in
     (res.invCmd, res.invErr)
+
+let getRandLowFixInv() =
+    let count = ctx.Procedures.GetTotalNumInvocations.Invoke().numInv in
+    let bound = Operators.min count (uint32 100) in
+    let idx = randomDbIdx bound in
+    let res = ctx.Procedures.GetRandLowFixInvocation.Invoke(idx) in
+    (res.cmd, res.err)
+
+let getPresentableExample () =
+    let unfixedCount = ctx.Procedures.GetNumInvocationsWithNoFix.Invoke().numInv in
+    if (int unfixedCount) <> 0 then
+        let idx = randomDbIdx unfixedCount in
+        let res = ctx.Procedures.GetUnfixedInvocation.Invoke(idx) in
+        (res.invCmd, res.invErr)
+    else
+        getRandLowFixInv()
+   
