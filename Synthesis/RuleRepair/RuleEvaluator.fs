@@ -195,3 +195,95 @@ let evalTopLevelExpr (e:TopLevelExpr) (cmdstr:SymbString) (errstr:SymbString)  =
             return fixedString
         }
 
+let findAnchors' eList =
+    let accFxn acc eExpr =
+        let (before, after, accList) = acc in
+        let newAccList = match eExpr with
+                         | ConstStr s -> (s, before, after) :: accList
+                         | _ -> accList in
+        (before + 1, after - 1, newAccList) in
+    List.fold accFxn (0, List.length eList - 1, []) eList
+
+let third (_,_,c) = c
+let findAnchors = findAnchors' >> third
+
+let getAllAnchorMatchesForIdx anchorList msgTok msgBefore msgAfter =
+    let isAnchorMatch (cStr, eBefore, eAfter) = 
+        cStr = msgTok && eBefore >= msgBefore && eAfter >= msgAfter in
+    List.filter isAnchorMatch anchorList
+
+let findAnchorMatchesForError errMsg anchorList =
+    let accFxn (msgBefore, msgAfter, accLst) msgTok =
+        let matches = getAllAnchorMatchesForIdx anchorList msgTok msgBefore msgAfter in
+        let newAccLst = (msgBefore, msgAfter, matches) :: accLst in
+        (msgBefore + 1, msgAfter - 1, newAccLst) in
+    List.fold accFxn (0, List.length errMsg - 1, []) errMsg
+
+let rec renameVars exprs varMap =
+    let accFxn expr (renamed, renamedIDs) =
+        match expr with
+        | ConstStr s -> ((ConstStr s)::renamed, renamedIDs)
+        | VarEq(i, x) -> if Set.contains i renamedIDs then
+                            (expr::renamed, renamedIDs)
+                         else
+                             let v = Map.find i varMap in
+                             (v::renamed, Set.add i renamedIDs)
+        | Var(i,pref,suf,x) -> let v = Var(i,pref,suf,x) in
+                               (v::renamed, Set.add i renamedIDs) in
+    List.foldBack accFxn exprs ([], Set.empty) 
+
+let truncateAndRenameVars start len exprs =
+    let varMapBuilder vMap expr = 
+         match expr with
+         | Var(i,pref,suf,x) -> Map.add i (Var(i,pref,suf,x)) vMap
+         | _ -> vMap in
+    let varMap = List.fold varMapBuilder Map.empty exprs
+    let truncated = exprs |> List.skip start |> List.take len in
+    renameVars truncated varMap
+
+let appendIfSome v lst =
+    match v with
+    |Some s -> s :: lst
+    | _ -> lst
+
+let getValidFixExpr varIDs fExpr = 
+   match fExpr with
+   | FixConstStr s -> Some fExpr
+   | FixFuncApp (funApps, outputs) ->
+            let filterPred (_,id) =
+                Set.contains id varIDs in
+            match List.filter filterPred funApps with
+            | [] -> None
+            | l  -> Some (FixFuncApp (l, outputs))
+
+let rec getValidFixCmd varIDs fCmd =
+    match fCmd with 
+    | [] -> Some []
+    | hd::tl -> option{
+                  let! rem = getValidFixCmd varIDs tl 
+                  let! filteredExpr = getValidFixExpr varIDs hd
+                  return filteredExpr :: rem
+                }
+
+let makeAnchoredRules substrLen msgBefore msgAfter potentialMatches topLvlRule =
+    let (FixRule (cmd, (ErrContent errExprs), (FixCmdParams fixCmd), count)) = topLvlRule in
+    let accFxn lst (_, expBefore, expAfter) =
+        let start = expBefore - msgBefore in //TO DO: check this
+        let res = option{
+                    let (renamedErrExpr, varIDs) = truncateAndRenameVars start substrLen errExprs
+                    let!  newFix = getValidFixCmd varIDs fixCmd
+                    return FixRule(cmd, ErrContent renamedErrExpr, FixCmdParams newFix, count)
+                  } in
+        appendIfSome res lst in
+    List.fold accFxn [] potentialMatches
+
+let getAnchoredRules substrLen topLvlRule anchorMatches =    
+    let mapFxn (msgBefore, msgAfter, potentialMatches) =
+        makeAnchoredRules substrLen msgBefore msgAfter potentialMatches topLvlRule in
+     let anchoredRules = List.map mapFxn anchorMatches in
+     List.concat anchoredRules
+
+let evalAnchoredRules cmd err anchoredRules =
+    List.map (fun exp -> evalTopLevelExpr exp cmd err) anchoredRules
+    |>  List.filter Option.isSome
+    |>  List.map Option.get
