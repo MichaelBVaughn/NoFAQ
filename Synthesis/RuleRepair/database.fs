@@ -96,7 +96,7 @@ let addRuleFromIDs ruleBin cmdName cmdlen errlen fixlen =
    row.CmdLen <- cmdlen
    row.OutLen <- errlen
    row.FixLen <- fixlen
-  // row.Votes <- uint32 0
+   row.Votes <- uint32 0
    ctx.SubmitUpdates()
    row.Id
 
@@ -153,7 +153,7 @@ let getFixRulesWithVarCmdName cmd err =
     query {for ruleInfo in ctx.Synthdb.Fixrule do
            where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.OutLen = uint32(errLen) && ruleInfo.CmdName = "")
            select (ruleInfo.Id, ruleInfo.FixProg)}
-(*
+
 let upvoteRule ruleID = ctx.Procedures.UpvoteRule.Invoke(ruleID)
 
 let randomDbIdx (max : uint32) =
@@ -188,5 +188,3 @@ let getPresentableExample () =
         (res.invCmd, res.invErr)
     else
         getRandLowFixInv()
-   
-   *)
