@@ -7,6 +7,9 @@ type OptionBuilder() =
 
 let option = OptionBuilder()
 
+let fstMap f (a,b) = (f a, b)
+let sndMap f (a,b) = (a, f b)
+
 let convertToCharSeq (s:string) =  [for c in s -> c]
 
 let rec cartesian l1 l2= 

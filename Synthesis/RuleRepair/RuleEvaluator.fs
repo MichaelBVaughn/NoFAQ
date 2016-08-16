@@ -25,18 +25,38 @@ let evalPos (p:Pos) (s:string) : int option =
                 None
            else
                 Some((List.nth matches (matches.Length+occ))+offset)
-        
-let evalSubstr fromInd toInd (str:string)= 
-    if(fromInd<0) then
-            if(toInd>0) then
-                str.Substring(str.Length+fromInd,toInd-str.Length-fromInd)
-            else
-                str.Substring(str.Length+fromInd,toInd-fromInd)             
-        else
-            if(toInd>0) then
-                str.Substring(fromInd,toInd-fromInd)
-            else
-                str.Substring(fromInd,str.Length+toInd-fromInd)    
+
+
+let evalSubstr fromInd toInd (str:string) = 
+    let (start, len) = if(fromInd<0) then
+                              if(toInd>0) then
+                                 (str.Length+fromInd,toInd-str.Length-fromInd)     
+                              else
+                                 (str.Length+fromInd,toInd-fromInd)             
+                           else
+                              if(toInd>0) then
+                                 (fromInd,toInd-fromInd)
+                              else
+                                 (fromInd,str.Length+toInd-fromInd) in
+     Some(str.Substring(start,len))
+                
+
+
+let evalSubstr2 fromInd toInd (str:string) = 
+    let (start, len) = if(fromInd<0) then
+                              if(toInd>0) then
+                                 (str.Length+fromInd,toInd-str.Length-fromInd)     
+                              else
+                                 (str.Length+fromInd,toInd-fromInd)             
+                           else
+                              if(toInd>0) then
+                                 (fromInd,toInd-fromInd)
+                              else
+                                 (fromInd,str.Length+toInd-fromInd) in
+     if start + len >= str.Length then
+        None
+     else
+        Some(str.Substring(start,len))
                 
 let evalSubstrLength fromInd toInd (str:string)= 
     if(fromInd<0) then
@@ -57,8 +77,8 @@ let evalFun (f:Fun) (str:string) =
             option{
                 let! fromInd = evalPos fromPos str in
                 let! toInd = evalPos toPos str in
-                let substring = evalSubstr fromInd toInd str in       
-                    return left+substring+right
+                let! substring = evalSubstr fromInd toInd str in       
+                return left+substring+right
             }
         with 
             | :? System.ArgumentOutOfRangeException -> None
@@ -219,7 +239,7 @@ let findAnchorMatchesForError errMsg anchorList =
         (msgBefore + 1, msgAfter - 1, newAccLst) in
     List.fold accFxn (0, List.length errMsg - 1, []) errMsg
 
-let rec renameVars exprs varMap =
+let rec renameVars exprs varMap newVarSet =
     let accFxn expr (renamed, renamedIDs) =
         match expr with
         | ConstStr s -> ((ConstStr s)::renamed, renamedIDs)
@@ -230,16 +250,26 @@ let rec renameVars exprs varMap =
                              (v::renamed, Set.add i renamedIDs)
         | Var(i,pref,suf,x) -> let v = Var(i,pref,suf,x) in
                                (v::renamed, Set.add i renamedIDs) in
-    List.foldBack accFxn exprs ([], Set.empty) 
+    List.foldBack accFxn exprs ([], newVarSet) 
 
-let truncateAndRenameVars start len exprs =
+let renameErrVars exprs varMap =
+    renameVars exprs varMap Set.empty |> fstMap ErrContent
+
+let renameCmdVars exprs varMap errVarSet =
+     renameVars exprs varMap errVarSet |> fstMap CmdParams
+
+
+let truncateAndRenameVars start len cmdExprs errExprs =
     let varMapBuilder vMap expr = 
          match expr with
          | Var(i,pref,suf,x) -> Map.add i (Var(i,pref,suf,x)) vMap
          | _ -> vMap in
-    let varMap = List.fold varMapBuilder Map.empty exprs
-    let truncated = exprs |> List.skip start |> List.take len in
-    renameVars truncated varMap
+    let errVarMap = List.fold varMapBuilder Map.empty errExprs
+    let fullVarMap = List.fold varMapBuilder errVarMap  cmdExprs
+    let truncated = errExprs |> List.skip start |> List.take len in
+    let (renamedErr, newErrVarSet) = renameErrVars truncated fullVarMap in
+    let (renamedCmd, newFullVarSet) = renameCmdVars cmdExprs fullVarMap newErrVarSet in
+    (renamedCmd, renamedErr, newFullVarSet)    
 
 let appendIfSome v lst =
     match v with
@@ -265,14 +295,14 @@ let rec getValidFixCmd varIDs fCmd =
                   return filteredExpr :: rem
                 }
 
-let makeAnchoredRules substrLen msgBefore msgAfter potentialMatches topLvlRule =
-    let (FixRule (cmd, (ErrContent errExprs), (FixCmdParams fixCmd), count)) = topLvlRule in
+let makeAnchoredRules substrLen msgBefore (msgAfter : int) potentialMatches topLvlRule =
+    let (FixRule ((CmdParams cmdExprs), (ErrContent errExprs), (FixCmdParams fixCmd), count)) = topLvlRule in
     let accFxn lst (_, expBefore, expAfter) =
         let start = expBefore - msgBefore in //TO DO: check this
         let res = option{
-                    let (renamedErrExpr, varIDs) = truncateAndRenameVars start substrLen errExprs
+                    let (renamedCmdExprs, renamedErrExprs, varIDs) = truncateAndRenameVars start substrLen cmdExprs errExprs
                     let!  newFix = getValidFixCmd varIDs fixCmd
-                    return FixRule(cmd, ErrContent renamedErrExpr, FixCmdParams newFix, count)
+                    return FixRule(renamedCmdExprs, renamedErrExprs, FixCmdParams newFix, count)
                   } in
         appendIfSome res lst in
     List.fold accFxn [] potentialMatches
@@ -287,3 +317,16 @@ let evalAnchoredRules cmd err anchoredRules =
     List.map (fun exp -> evalTopLevelExpr exp cmd err) anchoredRules
     |>  List.filter Option.isSome
     |>  List.map Option.get
+
+let substringMatch cmd errSubstr rule =
+    let (FixRule(cmdMatch,ErrContent errMatch,fixProg,_)) = rule in
+    let anchors = findAnchors errMatch in
+    let anchorMatches = findAnchorMatchesForError errSubstr anchors  |> third in
+    let anchoredRules = getAnchoredRules (List.length errSubstr) rule anchorMatches in
+    evalAnchoredRules cmd errSubstr anchoredRules
+  
+let listMatches cmd errSubstr rulelist =
+    rulelist 
+    |> List.map (substringMatch cmd errSubstr)
+    |> List.concat
+    

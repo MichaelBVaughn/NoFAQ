@@ -72,7 +72,6 @@
     <Compile Include="Parser.fs" />
     <Compile Include="RuleEvaluator.fs" />
     <Compile Include="RuleSynthesizer.fs" />
-    <Compile Include="DBBuilder.fs" />
     <Compile Include="TestExamples.fs" />
     <Compile Include="database.fs" />
     <Compile Include="Main.fs" />

@@ -240,27 +240,48 @@ let printStrList strList =
     printfn "------"
     strList |> List.iter (fun x -> printfn "%s\n" x)
 
+let ruleWithErrSizeAtLeast size rule =
+    let (FixRule (_, ErrContent l, _,_)) = rule in
+    List.length l >= size
+
+let cmdStartsWith str rule =
+    let (FixRule ((CmdParams l),_,_,_)) = rule in
+    match l.Head with
+    | ConstStr hd -> str = hd
+    | _ -> false
 
 
-(*//let synthAlg = VARIABLEsynthesizeRuleFromListOfExamples
+
+//let synthAlg = VARIABLEsynthesizeRuleFromListOfExamples
 let synthAlg = synthesizeRuleFromListOfExamples
 let filteredSeq = NewParseTestData(* varEqTestData *) |> Array.toList |> List.rev |> List.toSeq |> Seq.skip 1
 //List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 5 && List.length err = 4  && List.length fix = 6 )
 let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |>  Seq.toList |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 )  |>*) getTestCases 
 //let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |>  Seq.toList |> List.filter (fun ((_,_,fix)::_) -> (String.concat " " fix) = "git stash"  ) |> getTestCases 
-let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
-//let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
-let constlist = makeConstRuleList testCases
-let partResults = buildRuleList trainingSet constlist
-let nonConstRules = partResults |> List.filter (fun (FixRule (_, _, _, n)) -> n > 1 )
+//let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
+let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets
+//let partResults = multirulePartitioning synthAlg trainingSet 3 |> Seq.map fst |> List.concatlet constlist = makeConstRuleList testCases
+let rules = trainingSet 
+            |> List.map synthesizeRuleFromListOfExamples
+            |> List.filter Option.isSome
+            |> List.map Option.get
 
-let checkResults = checkTestCases testCases partResults
+let checkResults = checkTestCases testCases rules
 let successes = countSuccesses checkResults
 let multiMatches = countMultiMatches checkResults
 let singleMatches = countSingleMatches checkResults
-let failures = getFailures partResults testCases
-printfn "rules synthesized: %d successes: %d, failures %d, multimatches: %d, single matches: %d" (List.length nonConstRules) successes (testCases.Length - successes) multiMatches singleMatches
-*)
+let failures = getFailures rules testCases
+let cmd1 = strToSymbString "cd someCrapHuh"
+let err1 = strToSymbString "no such"
+let appropriateRules = rules |> List.filter (cmdStartsWith "cd") |> List.filter (ruleWithErrSizeAtLeast <| List.length err1)
+let reslist = listMatches cmd1 err1 appropriateRules
+
+List.iter printStrList reslist
+
+
+printfn "rules synthesized: %d successes: %d, failures %d, multimatches: %d, single matches: %d" (List.length rules) successes (testCases.Length - successes) multiMatches singleMatches
+
+(*
 let caseTupleToStr (cmd :SymbString, err: SymbString, fix: string List) =
    [String.concat " " cmd; String.concat " " err; String.concat " " fix ] |> String.concat "\n"
 
@@ -326,6 +347,7 @@ let addExistingExampleToRules (exID, cmd, err, fix) =
     |> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, exs ))
     |> Seq.map (fun (id, exs) -> (id, makeExampleSetFromIDs id exs))
     |> Seq.iter (fun (id, _) -> (addExampleToSet id exID) |> ignore)
+*)
 
 let simpleData = """[[
 {"cmd": "heroku luck", "err": "!    `luck` is not a heroku command.
@@ -338,15 +360,17 @@ let simpleData = """[[
  !    Perhaps you meant `cba`.
  !    See `heroku help` for a list of available commands.", "fix": "heroku cba"}
 ]]"""
-let simpleTestData = NewTestDataJsonRule.Parse(simpleData)
-
+(*
+//let simpleTestData = NewTestDataJsonRule.Parse(simpleData)
+let synthAlg = synthesizeRuleFromListOfExamples
 let filteredSeq = NewParseTestData (* varEqTestData *) |> Array.toList |> List.rev |> List.toSeq //|> Seq.skip 1
 //List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 5 && List.length err = 4  && List.length fix = 6 )
 let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |>  Seq.toList |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 )  |>*) getTestCases 
 //let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |>  Seq.toList |> List.filter (fun ((_,_,fix)::_) -> (String.concat " " fix) = "git stash"  ) |> getTestCases 
 let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
-//let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
-Seq.iter addExample trainingSet
+let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
+//Seq.iter addExample trainingSet
+*)
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
 let dbResults = checkTestCases testCases dbRules
@@ -374,8 +398,8 @@ let rec procLoop () =
 
 procLoop ()
 *)
+(*
 
-let sndMap f (a,b) = (a, f b)
 
 
 let deNBSPify str =
@@ -478,7 +502,7 @@ let responder  = choose [ GET >=> choose
 let main argv = 
     startWebServer cfg responder
     0
-
+*)
 
     
 
@@ -551,4 +575,4 @@ printfn "TEST CASES FAILED: %d" (failingTests/numberOfRepeats)
 printfn "Total number of tests: %d" (numberOfSingleExp/numberOfRepeats)
 *)
 
-//let s = Console.ReadLine()
+let s = Console.ReadLine()

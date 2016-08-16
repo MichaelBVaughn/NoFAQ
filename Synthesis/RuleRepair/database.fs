@@ -96,7 +96,7 @@ let addRuleFromIDs ruleBin cmdName cmdlen errlen fixlen =
    row.CmdLen <- cmdlen
    row.OutLen <- errlen
    row.FixLen <- fixlen
-   row.Votes <- uint32 0
+  // row.Votes <- uint32 0
    ctx.SubmitUpdates()
    row.Id
 
@@ -122,15 +122,6 @@ let getExamples =
                join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
                join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
                select (rEx, invocation, cmd, err, fix)} |> Seq.map (fun (rEx, invocation, cmd,err,fix) -> (rEx.Id, cmd.Text, err.Text, fix.Text))
-
-let getQueuedExamples =
-    query {for qEx in ctx.Synthdb.Examplequeue do
-           join rEx in ctx.Synthdb.Repairexample on (qEx.ExampleId = rEx.Id)
-           join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
-           join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
-           join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
-           join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
-           select (qEx, invocation, cmd, err, fix)} |> Seq.map (fun (qEx, invocation, cmd,err,fix) -> (qEx.Id, invocation.Id, cmd.Text, err.Text, fix.Text))
 
 let getRulesWithIDs =
     query {for ruleInfo in ctx.Synthdb.Fixrule do
@@ -162,7 +153,7 @@ let getFixRulesWithVarCmdName cmd err =
     query {for ruleInfo in ctx.Synthdb.Fixrule do
            where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.OutLen = uint32(errLen) && ruleInfo.CmdName = "")
            select (ruleInfo.Id, ruleInfo.FixProg)}
-
+(*
 let upvoteRule ruleID = ctx.Procedures.UpvoteRule.Invoke(ruleID)
 
 let randomDbIdx (max : uint32) =
@@ -198,3 +189,4 @@ let getPresentableExample () =
     else
         getRandLowFixInv()
    
+   *)

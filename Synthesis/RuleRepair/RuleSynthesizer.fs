@@ -149,11 +149,13 @@ let rec filterSingleSubstrPositions (l: (Pos * Pos) list) (inpStr:string) (outSt
                         if(jMatch.IsSome) then                            
                             let expSubLength = evalSubstrLength iMatch.Value jMatch.Value inpStr in
                             if(expSubLength = outStr.Length) then
-                                 let substring = evalSubstr iMatch.Value jMatch.Value inpStr in
-                                    if(substring.Equals(outStr)) then
-                                        (i,j):: remainder
-                                    else
-                                        remainder
+                                 let substringOpt = evalSubstr iMatch.Value jMatch.Value inpStr in
+                                    match substringOpt with 
+                                    | Some substring -> if(substring.Equals(outStr)) then
+                                                            (i,j):: remainder
+                                                        else
+                                                            remainder
+                                    | None -> remainder
                             else
                                 remainder
                         else 
@@ -525,7 +527,7 @@ let findOptPartition synthalg exampleList =
     findOptPartitionInternal synthalg partitionSeq
 
 let scaleGroup scaling group =
-    let repeatedGroup = List.replicate 3 group |> List.concat
+    let repeatedGroup = List.replicate 6 group |> List.concat
     (Seq.take scaling repeatedGroup) |> Seq.toList |> (List.append group)
 
 let scaleGroups groupedExamples scaling =
