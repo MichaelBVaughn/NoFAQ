@@ -105,6 +105,12 @@ let addExampleToSet ruleId cmdId  =
     row.RuleId <- ruleId
     row.CmdId <- cmdId
     row.Id
+    ctx.SubmitUpdates()
+
+let addKeywordMapping ruleId keyword =
+    let dbId = uint32(ruleId)
+    ctx.Procedures.AddKeywordMapping.Invoke(keyword, ruleId) |> ignore
+
 
 let deleteFromQueue entryId =
     let row = ctx.Synthdb.Examplequeue.Create()
@@ -188,3 +194,44 @@ let getPresentableExample () =
         (res.invCmd, res.invErr)
     else
         getRandLowFixInv()
+
+open System.Linq
+let getPartialErrCandidateRulesByKeyword cmdLen substrLen firstTok (keywords : string List) =
+    query{for ruleInfo in ctx.Synthdb.Fixrule do
+          join mapping in ctx.Synthdb.Keywordstofix 
+                       on (ruleInfo.Id = mapping.RuleId)
+          where (ruleInfo.CmdLen = uint32(cmdLen) 
+                 && ruleInfo.OutLen >= uint32(substrLen) 
+                 && ruleInfo.CmdName = firstTok
+                 && (keywords.Contains(mapping.Keyword)))
+          select (ruleInfo.Id, ruleInfo.FixProg)} |> Seq.map id
+
+let getSubstrRulesMatchingFirstCmdTok cmd err = 
+    let cmdLen = List.length cmd in
+    let errLen = List.length err in
+    let firstTok = match cmdLen with
+                  | 0 -> ""
+                  | _ -> List.head cmd in
+    getPartialErrCandidateRulesByKeyword cmdLen errLen firstTok err
+
+
+let getSubstrRulesWithVarCmdName cmd err =
+    let cmdLen = List.length cmd in
+    let errLen = List.length err in
+    getPartialErrCandidateRulesByKeyword cmdLen errLen "" err
+
+let getEmptyErrRules cmd =
+    let cmdLen = List.length cmd in
+    let firstTok = match cmdLen with
+                   | 0 -> ""
+                   | _ -> List.head cmd in
+    query {for ruleInfo in ctx.Synthdb.Fixrule do
+           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.CmdName = firstTok)
+           select (ruleInfo.Id, ruleInfo.FixProg)}
+
+let getEmptyErrRulesWithVarCmdName cmd =
+    let cmdLen = List.length cmd in
+    query {for ruleInfo in ctx.Synthdb.Fixrule do
+           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.CmdName = "")
+           select (ruleInfo.Id, ruleInfo.FixProg)}
+

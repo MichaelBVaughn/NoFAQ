@@ -465,8 +465,6 @@ let constRule cmd err fix = FixRule(CmdParams(constRuleExprList cmd), ErrContent
 //Multirule synthesis
 type ExampleTuple = SymbString * SymbString * SymbString
 
-
-
 // Synthesizes a rule from many examples
 let synthesizeRuleFromListOfExamples (l:ExampleTuple list)
                       : TopLevelExpr option = 

@@ -38,7 +38,10 @@ let evalSubstr fromInd toInd (str:string) =
                                  (fromInd,toInd-fromInd)
                               else
                                  (fromInd,str.Length+toInd-fromInd) in
-     Some(str.Substring(start,len))
+     if start + len > str.Length || start > str.Length || start < 0 || len < 0 then
+        None
+     else
+        Some(str.Substring(start,len))
                 
 
 
@@ -215,6 +218,12 @@ let evalTopLevelExpr (e:TopLevelExpr) (cmdstr:SymbString) (errstr:SymbString)  =
             return fixedString
         }
 
+let matchIsAllVars exprs =
+    let varPred expr = match expr with
+                    | Var(_,"","",_) -> true
+                    | _ -> false in
+    List.forall varPred exprs
+
 let findAnchors' eList =
     let accFxn acc eExpr =
         let (before, after, accList) = acc in
@@ -269,7 +278,7 @@ let truncateAndRenameVars start len cmdExprs errExprs =
     let truncated = errExprs |> List.skip start |> List.take len in
     let (renamedErr, newErrVarSet) = renameErrVars truncated fullVarMap in
     let (renamedCmd, newFullVarSet) = renameCmdVars cmdExprs fullVarMap newErrVarSet in
-    (renamedCmd, renamedErr, newFullVarSet)    
+    (renamedCmd, renamedErr, newFullVarSet)       
 
 let appendIfSome v lst =
     match v with
@@ -329,4 +338,11 @@ let listMatches cmd errSubstr rulelist =
     rulelist 
     |> List.map (substringMatch cmd errSubstr)
     |> List.concat
-    
+
+let tryMakeRuleWithEmptyErr topLvlRule =
+    let (FixRule ((CmdParams cmdExprs), (ErrContent errExprs), (FixCmdParams fixCmd), count)) = topLvlRule in
+    option{
+      let (renamedCmdExprs, renamedErrExprs, varIDs) = truncateAndRenameVars 0 0 cmdExprs errExprs
+      let!  newFix = getValidFixCmd varIDs fixCmd
+      return FixRule(renamedCmdExprs, renamedErrExprs, FixCmdParams newFix, count)
+    } 

@@ -531,6 +531,76 @@ Did you mean this?
 ]
 ]"""
 
+let unfixed ="""
+[
+[
+{"cmd":"ping http://www.a.net", "err":"ping: cannot resolve http://www.a.net: Unknown host"},
+{"cmd":"ping https://bitbucket.com", "err":"ping: cannot resolve https://github.com: Unknown host"},
+{"cmd":"ping http://www.qwantz.com", "err":"ping: cannot resolve http://www.qwantz.com: Unknown host"},
+],
+[
+{"cmd":"traceroute http://www.a.net", "err":"traceroute: unknown host http://www.a.net"},
+{"cmd":"traceroute https://bitbucket.com", "err":"traceroute: unknown host https://bitbucket.com"},
+{"cmd":"traceroute https://www.qwantz.com", "err":"traceroute: unknown host http://www.qwantz.com"},
+],
+[
+{"cmd":"scp q.txt w@z.net", "err":""},
+{"cmd":"scp file.py user@host.com", "err":""},
+{"cmd":"scp program.jar admin@server.org", "err":""},
+],
+[
+{"cmd":"scp q.txt w@z.net", "err":""},
+{"cmd":"scp file.py user@host.com", "err":""},
+{"cmd":"scp program.jar admin@server.org", "err":""},
+],
+[
+{"cmd":"tar xvzf a.tar.bz2" "err":"gzip: stdin: not in gzip format
+tar: Child returned status 1
+tar: Error is not recoverable: exiting now"},
+{"cmd":"tar -xvzf dirArchive.tar.bz2" "err":"gzip: stdin: not in gzip format
+tar: Child returned status 1
+tar: Error is not recoverable: exiting now"},
+{"cmd":"tar xvzf files.tar.bz2" "err":"gzip: stdin: not in gzip format
+tar: Child returned status 1
+tar: Error is not recoverable: exiting now"}
+],
+[
+{"cmd":"tar xvjf w.tar.gz", "err":"bzip2: (stdin) is not a bzip2 file
+tar: Child returned status 2
+ter: Error is not recoverable: exiting now"},
+{"cmd":"tar -xvjf fileArchive.tar.gz", "err":"bzip2: (stdin) is not a bzip2 file
+tar: Child returned status 2
+ter: Error is not recoverable: exiting now"},
+{"cmd":"tar xvjf dir.tar.gz", "err":"bzip2: (stdin) is not a bzip2 file
+tar: Child returned status 2
+ter: Error is not recoverable: exiting now"}
+],
+[
+{"cmd":"scp q.txt w@z.net", "err":""},
+{"cmd":"scp file.py user@host.com", "err":""},
+{"cmd":"scp program.jar admin@server.org", "err":""}
+],
+[
+{"cmd":"cd Program Files (x86)", "err":"-bash: syntax error near unexpected token `('"},
+{"cmd":"cd My Bins (x86)", "err":"-bash: syntax error near unexpected token `('"},
+{"cmd":"cd Steam Library (x86)", "err":"-bash: syntax error near unexpected token `('"}
+],
+[
+{"cmd":"dmesg", "err":"Unable to obtain kernel buffer: Operation not permitted"}
+],
+[
+{"cmd":"rm --weirdFilename", "err":"rm: illegal option -- -
+usage: rm [-f | -i] [-dPRrvW] file ...
+unlink file"},
+{"cmd":"rm --aFile", "err":"rm: illegal option -- -
+usage: rm [-f | -i] [-dPRrvW] file ...
+unlink file"}
+{"cmd":"rm --name.txt", "err":"rm: illegal option -- -
+usage: rm [-f | -i] [-dPRrvW] file ...
+unlink file"}
+]
+]"""
+
 //{
 //{"cmd": "./program `python print 'Aa' * 1200`", "err": "python: can't open file 'print': [Errno 2] No such file or directory", "fix": "./program `python -c \"print 'Aa' * 1200\"`"},
 //{"cmd": "./program `python print 'A' * 100`", "err": "python: can't open file 'print': [Errno 2] No such file or directory", "fix": "./program `python -c \"print 'A' * 100\"`"},

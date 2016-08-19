@@ -251,7 +251,7 @@ let cmdStartsWith str rule =
     | _ -> false
 
 
-
+(*
 //let synthAlg = VARIABLEsynthesizeRuleFromListOfExamples
 let synthAlg = synthesizeRuleFromListOfExamples
 let filteredSeq = NewParseTestData(* varEqTestData *) |> Array.toList |> List.rev |> List.toSeq |> Seq.skip 1
@@ -280,8 +280,8 @@ List.iter printStrList reslist
 
 
 printfn "rules synthesized: %d successes: %d, failures %d, multimatches: %d, single matches: %d" (List.length rules) successes (testCases.Length - successes) multiMatches singleMatches
+*)
 
-(*
 let caseTupleToStr (cmd :SymbString, err: SymbString, fix: string List) =
    [String.concat " " cmd; String.concat " " err; String.concat " " fix ] |> String.concat "\n"
 
@@ -309,7 +309,18 @@ let getCmdName (FixRule(CmdParams cMatch, _, _,_) : TopLevelExpr) =
      match cMatch with
      | headExpr :: _ -> extractConstStr headExpr
      | _ -> "" 
+
+let getKeywords rule =
+    let (FixRule(_,ErrContent l,_,_)) = rule in
+    let accFxn lst expr =
+        match expr with
+        | ConstStr s -> s :: lst
+        | _ -> lst in
+    List.fold accFxn [] l
  
+let updateKeywordMapping ruleId rule =
+    let keywords = getKeywords rule in
+    List.iter (addKeywordMapping ruleId) keywords
 
 let addExample (cmd, err, fix) = 
 //    let ignored = printfn "add" in
@@ -322,9 +333,10 @@ let addExample (cmd, err, fix) =
     let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles ; yield dbGroupRulesWithExamples})
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
-    |> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, exs ))
-    |> Seq.map (fun (id, exs) -> (id, makeExampleSetFromIDs id exs))
-    |> Seq.iter (fun (id, _) -> (addExampleToSet id exID) |> ignore)
+    |> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, r, exs ))
+    |> Seq.map (fun (id, r, exs) -> (id, r, makeExampleSetFromIDs id exs))
+    |> Seq.map (fun (id,r,_) -> (id, updateKeywordMapping id r))
+    |> Seq.iter (fun (id,_) -> (addExampleToSet id exID) |> ignore)
 
 let ignoreSingleRule exID exs =
     match exs with 
@@ -344,10 +356,10 @@ let addExistingExampleToRules (exID, cmd, err, fix) =
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
     |> Seq.filter (fun (_,exs) -> ignoreSingleRule exID (Seq.toList exs))
-    |> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, exs ))
-    |> Seq.map (fun (id, exs) -> (id, makeExampleSetFromIDs id exs))
-    |> Seq.iter (fun (id, _) -> (addExampleToSet id exID) |> ignore)
-*)
+    |> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, r, exs ))
+    |> Seq.map (fun (id, r, exs) -> (id, r, makeExampleSetFromIDs id exs))
+    |> Seq.map (fun (id, r, _) -> (id, updateKeywordMapping id r))
+    |> Seq.iter (fun (id,_) -> (addExampleToSet id exID) |> ignore)
 
 let simpleData = """[[
 {"cmd": "heroku luck", "err": "!    `luck` is not a heroku command.
@@ -360,7 +372,7 @@ let simpleData = """[[
  !    Perhaps you meant `cba`.
  !    See `heroku help` for a list of available commands.", "fix": "heroku cba"}
 ]]"""
-(*
+
 //let simpleTestData = NewTestDataJsonRule.Parse(simpleData)
 let synthAlg = synthesizeRuleFromListOfExamples
 let filteredSeq = NewParseTestData (* varEqTestData *) |> Array.toList |> List.rev |> List.toSeq //|> Seq.skip 1
@@ -370,7 +382,7 @@ let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun it
 let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
 let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
 //Seq.iter addExample trainingSet
-*)
+
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
 let dbResults = checkTestCases testCases dbRules
@@ -398,9 +410,6 @@ let rec procLoop () =
 
 procLoop ()
 *)
-(*
-
-
 
 let deNBSPify str =
     let nbsp = 160 in
@@ -408,22 +417,103 @@ let deNBSPify str =
     String.map mapFxn str |> (fun s -> s.Trim(' '))
 
 open Newtonsoft.Json
-let trySynthFix cmd err =
+
+let getFullMatches symCmd symErr =
+    let cmdNameMatches = getFixRuleMatchingFirstCmdTok symCmd symErr in
+    let varCmdMatches = getFixRulesWithVarCmdName symCmd symErr in
+    Seq.concat <| seq{yield cmdNameMatches; yield varCmdMatches}
+
+let getSubstrMatches symCmd symErr =
+    let cmdNameMatches = getSubstrRulesMatchingFirstCmdTok symCmd symErr in
+    let varCmdMatches = getSubstrRulesWithVarCmdName symCmd symErr in
+    Seq.concat <|seq{ yield cmdNameMatches; yield varCmdMatches}
+
+let getEmptyErrMatches symCmd =
+    let cmdNameMatches = getEmptyErrRules symCmd in
+    let varCmdMatches = getEmptyErrRulesWithVarCmdName symCmd in
+    Seq.concat <|seq{ yield cmdNameMatches; yield varCmdMatches}
+
+let trySynthFixInternalOrig cmd err ruleQuery ruleEvaluator =
     let mappedCmd = deNBSPify cmd
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
-    let evalFxn = (fun rule -> evalTopLevelExpr rule symCmd symErr)
-    let cmdNameMatches = getFixRuleMatchingFirstCmdTok symCmd symErr in
-    let varCmdMatches = getFixRulesWithVarCmdName symCmd symErr in
-    let ruleBins = Seq.concat (seq{yield cmdNameMatches; yield varCmdMatches}) in
+    let evalFxn = (fun rule -> ruleEvaluator rule symCmd symErr)
+    let ruleBins = ruleQuery symCmd symErr
     let potentialRules = ruleBins |> Seq.map (sndMap unpickleRule) in
-    let outputs = (potentialRules 
+    potentialRules 
     |> Seq.map (sndMap evalFxn) 
     |> Seq.filter  (snd >> Option.isSome) 
     |> Seq.map (sndMap Option.get) 
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]))  in
-    JsonConvert.SerializeObject  (outputs |> Seq.toArray) // For now, choose first one. Later, we'll pass a list, let the user see suggested fixes.
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.toArray 
+
+let cmdHasConst rule =
+    let (FixRule(CmdParams pList, _, _, _)) = rule in
+     not <| matchIsAllVars pList
+
+let trySynthFixInternalPartial cmd err ruleQuery =
+    let mappedCmd = deNBSPify cmd
+    let symCmd = strToSymbString (deNBSPify cmd) in
+    let symErr = strToSymbString (deNBSPify err) in
+    let ruleBins = ruleQuery symCmd symErr
+    let potentialRules = ruleBins 
+                         |> Seq.map (sndMap unpickleRule)
+                         |> Seq.filter (snd >> cmdHasConst) in
+    potentialRules  
+    |> Seq.map (sndMap (substringMatch symCmd symErr)) 
+    |> Seq.map (fun (f, s) -> Seq.map 
+                                 (fun x -> (f,x)) 
+                                 s) 
+    |> Seq.concat
+    |> Seq.map (sndMap <| String.concat " ") 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.toArray
+    
+let trySynthFixFull cmd err =
+    trySynthFixInternalOrig cmd err getFullMatches evalTopLevelExpr
+
+let trySynthFixSubstr cmd err =
+    trySynthFixInternalPartial cmd err getSubstrMatches
+    
+
+let trySynthFixEmpty cmd err =
+    let mappedCmd = deNBSPify cmd
+    let symCmd = strToSymbString (deNBSPify cmd) in
+    let symErr = strToSymbString (deNBSPify err) in
+    let evalFxn = (fun rule -> evalTopLevelExpr rule symCmd symErr)
+    let ruleBins =  getEmptyErrMatches symCmd 
+    let potentialRules = ruleBins 
+                         |> Seq.map (sndMap unpickleRule) 
+                         |> Seq.filter (snd >> cmdHasConst) in
+    potentialRules
+    |> Seq.map (sndMap tryMakeRuleWithEmptyErr) 
+    |> Seq.filter (snd >> Option.isSome)
+    |> Seq.map (sndMap Option.get)
+    |> Seq.map (sndMap evalFxn) 
+    |> Seq.filter  (snd >> Option.isSome) 
+    |> Seq.map (sndMap Option.get) 
+    |> Seq.map (sndMap <| String.concat " ") 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.toArray 
+
+let errIsEmptyStr err =
+    match err with
+    | hd::[] -> hd = ""
+    | _ -> false
+
+let trySynthFix cmd err =
+    let fullMatches = trySynthFixFull cmd err in
+    if Array.isEmpty fullMatches then
+       let symErr = strToSymbString (deNBSPify err) in
+       if errIsEmptyStr symErr then
+          trySynthFixEmpty cmd err
+          |> JsonConvert.SerializeObject
+       else
+          trySynthFixSubstr cmd err
+          |> JsonConvert.SerializeObject 
+    else
+       JsonConvert.SerializeObject fullMatches
 
 let tryAddEx id cmd err fix =
     let exID = System.UInt32.Parse id in
@@ -442,6 +532,8 @@ let tryGetRandom () =
     let invPair = getRandomExample() in
     let invAssoc = Map.ofList ["cmd", fst invPair; "err", snd invPair] in
     JsonConvert.SerializeObject invAssoc
+
+
     
 
 open Suave
@@ -488,11 +580,14 @@ let randUnfixedResponder = request(fun r -> setHeader "Access-Control-Allow-Orig
 
 let randExampleResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (tryGetRandom()))
 
+let testResponder = request(fun r-> setHeader "Access-Control-Allow-Origin" "*" >=> OK (getPartialErrCandidateRulesByKeyword 1 2 "" ("found" :: []) |> Seq.map fst |> Seq.toArray |> JsonConvert.SerializeObject))
+
 let responder  = choose [ GET >=> choose
                                   [path "/exSynth.ajax" >=> exSynthResponder
                                    path "/upvote.ajax" >=> voteResponder
                                    path "/getOneUnfixed.ajax" >=> randUnfixedResponder
-                                   path "/getRandEx.ajax" >=> randExampleResponder]
+                                   path "/getRandEx.ajax" >=> randExampleResponder
+                                   path "/test.ajax" >=> testResponder]
                           POST >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder]]
 
@@ -502,7 +597,7 @@ let responder  = choose [ GET >=> choose
 let main argv = 
     startWebServer cfg responder
     0
-*)
+
 
     
 
@@ -575,4 +670,4 @@ printfn "TEST CASES FAILED: %d" (failingTests/numberOfRepeats)
 printfn "Total number of tests: %d" (numberOfSingleExp/numberOfRepeats)
 *)
 
-let s = Console.ReadLine()
+//let s = Console.ReadLine()
