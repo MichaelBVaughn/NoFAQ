@@ -159,6 +159,7 @@ let addExampleFromIds invId fixId =
     let row = ctx.Synthdb.Repairexample.Create() 
     row.InvocationId <- invId
     row.FixId <- fixId
+    row.SubmitCount <- uint32(3)
     ctx.SubmitUpdates()
     row.Id
 
@@ -203,8 +204,6 @@ let deleteFromQueue entryId =
 
 let makeExampleSetFromIDs ruleId idList =
    Seq.iter (fun x -> addExampleToSet ruleId x |> ignore) idList
-
-
 
 let getExamples =
     query {for rEx in ctx.Synthdb.Repairexample do
