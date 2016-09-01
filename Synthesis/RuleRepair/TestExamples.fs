@@ -595,7 +595,7 @@ unlink file"},
 {"cmd":"rm --aFile", "err":"rm: illegal option -- -
 usage: rm [-f | -i] [-dPRrvW] file ...
 unlink file"}
-{"cmd":"rm --name.txt", "err":"rm: illegal option -- -
+{"cmd":"rm --bla", "err":"rm: illegal option -- -
 usage: rm [-f | -i] [-dPRrvW] file ...
 unlink file"}
 ]

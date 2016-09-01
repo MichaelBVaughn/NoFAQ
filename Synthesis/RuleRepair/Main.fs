@@ -381,7 +381,7 @@ let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun it
 //let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |>  Seq.toList |> List.filter (fun ((_,_,fix)::_) -> (String.concat " " fix) = "git stash"  ) |> getTestCases 
 let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
 let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
-//Seq.iter addExample trainingSet
+Seq.iter addExample trainingSet
 
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
@@ -554,7 +554,6 @@ let allow_cors : WebPart =
                             setCORSHeaders
                             >=> OK "CORS approved")
     ]
-
 let cfg = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083] }
 
 let simpleMethod (r : HttpRequest) = 
@@ -590,6 +589,7 @@ let responder  = choose [ GET >=> choose
                                    path "/test.ajax" >=> testResponder]
                           POST >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder]]
+
 
 
 //TO DO: uncomment
