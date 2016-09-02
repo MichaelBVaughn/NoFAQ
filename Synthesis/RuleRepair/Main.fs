@@ -481,7 +481,7 @@ let trySynthFixEmpty cmd err =
     let mappedCmd = deNBSPify cmd
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
-    let evalFxn = (fun rule -> evalTopLevelExpr rule symCmd symErr)
+    let evalFxn = (fun rule -> evalTopLevelExpr rule symCmd symErr) 
     let ruleBins =  getEmptyErrMatches symCmd 
     let potentialRules = ruleBins 
                          |> Seq.map (sndMap unpickleRule) 
