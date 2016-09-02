@@ -106,26 +106,6 @@
       <HintPath>..\packages\FsPickler.Json.2.3.0\lib\net45\FsPickler.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="Hopac">
-      <HintPath>..\packages\Hopac.0.3.7\lib\net45\Hopac.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Hopac.Core">
-      <HintPath>..\packages\Hopac.0.3.7\lib\net45\Hopac.Core.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Hopac.Platform">
-      <HintPath>..\packages\Hopac.0.3.7\lib\net45\Hopac.Platform.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Logary">
-      <HintPath>..\packages\Logary.4.0.60\lib\net40\Logary.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Logary.Adapters.Suave">
-      <HintPath>..\packages\Logary.Adapters.Suave.4.0.60\lib\net40\Logary.Adapters.Suave.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="MySql.Data">
       <HintPath>..\packages\MySql.Data.6.9.9\lib\net45\MySql.Data.dll</HintPath>
