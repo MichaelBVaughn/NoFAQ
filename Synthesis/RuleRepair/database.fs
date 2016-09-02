@@ -207,6 +207,7 @@ let makeExampleSetFromIDs ruleId idList =
 
 let getExamples =
     query {for rEx in ctx.Synthdb.Repairexample do
+               where (rEx.SubmitCount > uint32(2))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
                join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
@@ -263,21 +264,24 @@ let getUnfixedExample () =
     let res = ctx.Procedures.GetUnfixedInvocation.Invoke(idx) in
     (res.invCmd, res.invErr)
 
-let getRandLowFixInv() =
-    let count = ctx.Procedures.GetTotalNumInvocations.Invoke().numInv in
-    let bound = Operators.min count (uint32 15) in
-    let idx = randomDbIdx bound in
+let getLowFixInv idx =
     let res = ctx.Procedures.GetRandLowFixInvocation.Invoke(idx) in
     (res.cmd, res.err)
 
+let getRandInv () =
+    let count = ctx.Procedures.GetNumInvocations.Invoke().numInv in
+    let idx = randomDbIdx count in
+    let res = ctx.Procedures.GetInvocation.Invoke(idx) in
+    (res.cmd, res.err)
+
 let getPresentableExample () =
-    let unfixedCount = ctx.Procedures.GetNumInvocationsWithNoFix.Invoke().numInv in
-    if (int unfixedCount) <> 0 then
-       let idx = randomDbIdx unfixedCount in
-       let res = ctx.Procedures.GetUnfixedInvocation.Invoke(idx) in
-       (res.invCmd, res.invErr)
-    else
-        getRandLowFixInv()
+    let lowFixCount = ctx.Procedures.GetTotalNumLowFixInvocations.Invoke().numInv in
+    let bound = lowFixCount in
+    if (int bound) <> 0 then
+        let idx = randomDbIdx bound in
+            getLowFixInv idx    
+    else 
+        getRandInv()
 
 open System.Linq
 let getPartialErrCandidateRulesByKeyword cmdLen substrLen firstTok (keywords : string List) =
