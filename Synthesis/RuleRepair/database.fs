@@ -294,19 +294,63 @@ let getPartialErrCandidateRulesByKeyword cmdLen substrLen firstTok (keywords : s
                  && (keywords.Contains(mapping.Keyword)))
           select (ruleInfo.Id, ruleInfo.FixProg)} |> Seq.map id
 
+let mkCanonical lst = String.concat " " lst
+
+let computeHashDigest lst = md5 <| mkCanonical lst
+
+let getPartialErrCandidateExamplesByKeyword cmd substrLen (keywords : string List) =
+   let cmdLen = List.length cmd
+   let cmdHash = computeHashDigest cmd in
+   let firstTok = List.head cmd
+   query{for cmd in ctx.Synthdb.Command do
+         join inv in ctx.Synthdb.Invocation on (cmd.Id = inv.CmdId)
+         join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+         join rEx in ctx.Synthdb.Repairexample on (inv.Id = rEx.InvocationId)
+         join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+         join mapping in ctx.Synthdb.Keywordstoexamples on (rEx.Id = mapping.ExampleId)
+         where (cmd.WordCount = uint32(cmdLen) 
+                && cmd.TxtHash = cmdHash
+                && err.WordCount >= uint32(substrLen)
+                && cmd.FirstWord = firstTok
+                && rEx.SubmitCount > uint32(2)
+                && (keywords.Contains(mapping.Keyword)))
+         select (cmd.Text, err.Text, fix.Text) 
+        } |> Seq.map id
+
+let getCandidatePartialExamples cmd err =
+    getPartialErrCandidateExamplesByKeyword cmd (List.length err) err
+
+let getFullErrCandidateExamples cmd err =
+    let cmdHash = computeHashDigest cmd in
+    let errHash = computeHashDigest err in
+    let cmdLen = List.length cmd in
+    let errLen = match err with
+                 | [""] -> 0
+                 | _ -> List.length err in
+    query{for cmd in ctx.Synthdb.Command do
+          join inv in ctx.Synthdb.Invocation on (cmd.Id = inv.CmdId)
+          join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+          join rEx in ctx.Synthdb.Repairexample on (inv.Id = rEx.InvocationId)
+          join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+          where (cmd.TxtHash = cmdHash
+                 && err.TxtHash = errHash
+                 && cmd.WordCount = uint32(cmdLen)
+                 && err.WordCount = uint32(errLen))
+          select (cmd.Text, err.Text, fix.Text)} |> Seq.map id
+
 let getSubstrRulesMatchingFirstCmdTok cmd err = 
     let cmdLen = List.length cmd in
     let errLen = List.length err in
     let firstTok = match cmdLen with
-                  | 0 -> ""
-                  | _ -> List.head cmd in
+                   | 0 -> ""
+                   | _ -> List.head cmd in
     getPartialErrCandidateRulesByKeyword cmdLen errLen firstTok err
-
 
 let getSubstrRulesWithVarCmdName cmd err =
     let cmdLen = List.length cmd in
     let errLen = List.length err in
     getPartialErrCandidateRulesByKeyword cmdLen errLen "" err
+
 
 let getEmptyErrRules cmd =
     let cmdLen = List.length cmd in

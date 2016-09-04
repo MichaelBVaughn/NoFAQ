@@ -381,7 +381,7 @@ let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun it
 //let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |>  Seq.toList |> List.filter (fun ((_,_,fix)::_) -> (String.concat " " fix) = "git stash"  ) |> getTestCases 
 let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
 let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
-Seq.iter addExample trainingSet
+//Seq.iter addExample trainingSet
 
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
@@ -475,7 +475,38 @@ let trySynthFixFull cmd err =
 
 let trySynthFixSubstr cmd err =
     trySynthFixInternalPartial cmd err getSubstrMatches
-    
+ 
+let trySynthFixFromExamplePartial cmd err =
+    let mappedCmd = deNBSPify cmd
+    let symCmd = strToSymbString (deNBSPify cmd) in
+    let symErr = strToSymbString (deNBSPify err) in
+    let potentialExamples = getCandidatePartialExamples symCmd symErr in
+    let potentialRules = potentialExamples |> Seq.map (fun (c,e,f) -> (uint32(0),c,e,f)) |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    potentialRules  
+    |> Seq.map (sndMap (substringMatch symCmd symErr)) 
+    |> Seq.map (fun (f, s) -> Seq.map 
+                                 (fun x -> (f,x)) 
+                                 s) 
+    |> Seq.concat
+    |> Seq.map (sndMap <| String.concat " ") 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.toArray   
+
+let trySynthFixFromExampleFull cmd err =
+    let mappedCmd = deNBSPify cmd
+    let symCmd = strToSymbString (deNBSPify cmd) in
+    let symErr = strToSymbString (deNBSPify err) in
+    let potentialExamples = getFullErrCandidateExamples symCmd symErr in
+    let potentialRules = potentialExamples |> Seq.map (fun (c,e,f) -> (uint32(0),c,e,f)) |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    potentialRules  
+    |> Seq.map (sndMap (substringMatch symCmd symErr)) 
+    |> Seq.map (fun (f, s) -> Seq.map 
+                                 (fun x -> (f,x)) 
+                                 s) 
+    |> Seq.concat
+    |> Seq.map (sndMap <| String.concat " ") 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.toArray  
 
 let trySynthFixEmpty cmd err =
     let mappedCmd = deNBSPify cmd
@@ -502,16 +533,29 @@ let errIsEmptyStr err =
     | hd::[] -> hd = ""
     | _ -> false
 
+let tryExampleMatch cmd err =
+    let fullMatches = trySynthFixFromExampleFull cmd err in
+    if Array.isEmpty fullMatches then
+       trySynthFixFromExamplePartial cmd err |> JsonConvert.SerializeObject
+    else
+       JsonConvert.SerializeObject fullMatches
+
 let trySynthFix cmd err =
     let fullMatches = trySynthFixFull cmd err in
     if Array.isEmpty fullMatches then
        let symErr = strToSymbString (deNBSPify err) in
        if errIsEmptyStr symErr then
-          trySynthFixEmpty cmd err
-          |> JsonConvert.SerializeObject
+          let substrMatches = trySynthFixEmpty cmd err in
+          if Array.isEmpty substrMatches then
+             tryExampleMatch cmd err
+          else
+             JsonConvert.SerializeObject substrMatches   
        else
-          trySynthFixSubstr cmd err
-          |> JsonConvert.SerializeObject 
+          let substrMatches = trySynthFixSubstr cmd err in
+          if Array.isEmpty substrMatches then
+             tryExampleMatch cmd err
+          else
+             JsonConvert.SerializeObject substrMatches
     else
        JsonConvert.SerializeObject fullMatches
 
