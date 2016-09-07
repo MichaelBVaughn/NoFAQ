@@ -74,6 +74,7 @@
     <Compile Include="RuleSynthesizer.fs" />
     <Compile Include="TestExamples.fs" />
     <Compile Include="database.fs" />
+    <Compile Include="InputFiltering.fs" />
     <Compile Include="Main.fs" />
     <Content Include="packages.config" />
   </ItemGroup>
