@@ -445,7 +445,7 @@ let trySynthFixInternalOrig cmd err ruleQuery ruleEvaluator =
     |> Seq.filter  (snd >> Option.isSome) 
     |> Seq.map (sndMap Option.get) 
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
     |> Seq.toArray 
 
 let cmdHasConst rule =
@@ -467,7 +467,7 @@ let trySynthFixInternalPartial cmd err ruleQuery =
                                  s) 
     |> Seq.concat
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
     |> Seq.toArray
     
 let trySynthFixFull cmd err =
@@ -481,7 +481,7 @@ let trySynthFixFromExamplePartial cmd err =
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
     let potentialExamples = getCandidatePartialExamples symCmd symErr in
-    let potentialRules = potentialExamples |> Seq.map (fun (c,e,f) -> (uint32(0),c,e,f)) |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
     potentialRules  
     |> Seq.map (sndMap (substringMatch symCmd symErr)) 
     |> Seq.map (fun (f, s) -> Seq.map 
@@ -489,7 +489,7 @@ let trySynthFixFromExamplePartial cmd err =
                                  s) 
     |> Seq.concat
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id |> Seq.head |> (fun x -> x.ToString()); "fix", output; "fromExample", "true"]) 
     |> Seq.toArray   
 
 let trySynthFixFromExampleFull cmd err =
@@ -497,7 +497,7 @@ let trySynthFixFromExampleFull cmd err =
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
     let potentialExamples = getFullErrCandidateExamples symCmd symErr in
-    let potentialRules = potentialExamples |> Seq.map (fun (c,e,f) -> (uint32(0),c,e,f)) |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
     potentialRules  
     |> Seq.map (sndMap (substringMatch symCmd symErr)) 
     |> Seq.map (fun (f, s) -> Seq.map 
@@ -505,7 +505,7 @@ let trySynthFixFromExampleFull cmd err =
                                  s) 
     |> Seq.concat
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id |> Seq.head |> (fun x -> x.ToString()); "fix", output; "fromExample", "true"]) 
     |> Seq.toArray  
 
 let trySynthFixEmpty cmd err =
@@ -525,7 +525,7 @@ let trySynthFixEmpty cmd err =
     |> Seq.filter  (snd >> Option.isSome) 
     |> Seq.map (sndMap Option.get) 
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
     |> Seq.toArray 
 
 let errIsEmptyStr err =
@@ -568,8 +568,8 @@ let tryAddEx id cmd err fix =
     "Ok"
 
 let tryGetUnfixed () =
-    let invPair = getPresentableExample() in
-    let invAssoc = Map.ofList ["cmd", fst invPair; "err", snd invPair] in
+    let (cmd, err, id) = getPresentableExample() in
+    let invAssoc = Map.ofList ["cmd", cmd; "err", err; "invId", (id.ToString())] in
     JsonConvert.SerializeObject invAssoc
 
 let tryGetRandom () =
@@ -615,9 +615,13 @@ let exSynthResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" 
                                                                                                         | _ -> "an error occurred at routing"))
 
 
-let voteResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
-                                                                                          | Choice1Of2 id -> upvoteRule (System.UInt32.Parse id) |> ignore |> fun _ -> "voted"
-                                                                                          | _ -> "an error occurred at routing"))
+let upvoteRuleResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
+                                                                                                | Choice1Of2 id -> upvoteRule (System.UInt32.Parse id) |> ignore |> fun _ -> "voted"
+                                                                                                | _ -> "an error occurred at routing"))
+
+let upvoteExampleResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
+                                                                                                   | Choice1Of2 id -> upvoteExample (System.UInt32.Parse id) |> ignore |> fun _ -> "voted"
+                                                                                                   | _ -> "an error occurred at routing"))
 
 let randUnfixedResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (tryGetUnfixed()))
 
@@ -625,11 +629,27 @@ let randExampleResponder = request(fun r -> setHeader "Access-Control-Allow-Orig
 
 let testResponder = request(fun r-> setHeader "Access-Control-Allow-Origin" "*" >=> OK (getPartialErrCandidateRulesByKeyword 1 2 "" ("found" :: []) |> Seq.map fst |> Seq.toArray |> JsonConvert.SerializeObject))
 
+let flagRuleResponder  = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
+                                                                                                     | Choice1Of2 id -> flagRule(System.UInt32.Parse id) |> ignore |> (fun () -> "Flagged.")
+                                                                                                     | _ -> "an error occured at routing"))
+
+let flagInvocationResponder =  request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
+                                                                                                     | Choice1Of2 id -> flagInvocation(System.UInt32.Parse id) |> ignore |> (fun () -> "Flagged.")
+                                                                                                     | _ -> "an error occured at routing"))
+
+let flagExampleResponder =  request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "id") with
+                                                                                                  | Choice1Of2 id -> flagExample(System.UInt32.Parse id) |> ignore |> (fun () -> "Flagged.")
+                                                                                                  | _ -> "an error occured at routing"))
+
 let responder  = choose [ GET >=> choose
                                   [path "/exSynth.ajax" >=> exSynthResponder
-                                   path "/upvote.ajax" >=> voteResponder
+                                   path "/upvoteRule.ajax" >=> upvoteRuleResponder
+                                   path "/upvoteExample.ajax" >=> upvoteExampleResponder
                                    path "/getOneUnfixed.ajax" >=> randUnfixedResponder
                                    path "/getRandEx.ajax" >=> randExampleResponder
+                                   path "/flagRule.ajax" >=> flagRuleResponder
+                                   path "/flagInvocation.ajax" >=> flagInvocationResponder
+                                   path "/flagExample.ajax" >=> flagExampleResponder
                                    path "/test.ajax" >=> testResponder]
                           POST >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder]]

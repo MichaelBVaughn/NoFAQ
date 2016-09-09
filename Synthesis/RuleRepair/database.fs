@@ -207,7 +207,8 @@ let makeExampleSetFromIDs ruleId idList =
 
 let getExamples =
     query {for rEx in ctx.Synthdb.Repairexample do
-               where (rEx.SubmitCount > uint32(2))
+               where (rEx.SubmitCount > uint32(2)
+                      && rEx.FlagCount < uint32(6))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
                join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
@@ -234,7 +235,10 @@ let getFixRuleMatchingFirstCmdTok cmd err =
                   | 0 -> ""
                   | _ -> List.head cmd in
     query {for ruleInfo in ctx.Synthdb.Fixrule do
-           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.OutLen = uint32(errLen) && ruleInfo.CmdName = firstTok)
+           where (ruleInfo.CmdLen = uint32(cmdLen) && 
+                  ruleInfo.OutLen = uint32(errLen) && 
+                  ruleInfo.CmdName = firstTok &&
+                  ruleInfo.FlagCount < uint32(6))
            select (ruleInfo.Id, ruleInfo.FixProg) }
 
 
@@ -242,7 +246,10 @@ let getFixRulesWithVarCmdName cmd err =
     let cmdLen = List.length cmd in
     let errLen = List.length err in
     query {for ruleInfo in ctx.Synthdb.Fixrule do
-           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.OutLen = uint32(errLen) && ruleInfo.CmdName = "")
+           where (ruleInfo.CmdLen = uint32(cmdLen) && 
+                  ruleInfo.OutLen = uint32(errLen) && 
+                  ruleInfo.CmdName = "" &&
+                  ruleInfo.FlagCount < uint32(6))
            select (ruleInfo.Id, ruleInfo.FixProg)}
 
 let upvoteRule ruleID = ctx.Procedures.UpvoteRule.Invoke(ruleID)
@@ -266,13 +273,13 @@ let getUnfixedExample () =
 
 let getLowFixInv idx =
     let res = ctx.Procedures.GetRandLowFixInvocation.Invoke(idx) in
-    (res.cmd, res.err)
+    (res.cmd, res.err, res.invId)
 
 let getRandInv () =
     let count = ctx.Procedures.GetNumInvocations.Invoke().numInv in
     let idx = randomDbIdx count in
     let res = ctx.Procedures.GetInvocation.Invoke(idx) in
-    (res.cmd, res.err)
+    (res.cmd, res.err, res.invId)
 
 let getPresentableExample () =
     let lowFixCount = ctx.Procedures.GetTotalNumLowFixInvocations.Invoke().numInv in
@@ -291,7 +298,8 @@ let getPartialErrCandidateRulesByKeyword cmdLen substrLen firstTok (keywords : s
           where (ruleInfo.CmdLen = uint32(cmdLen) 
                  && ruleInfo.OutLen >= uint32(substrLen) 
                  && ruleInfo.CmdName = firstTok
-                 && (keywords.Contains(mapping.Keyword)))
+                 && (keywords.Contains(mapping.Keyword))
+                 && ruleInfo.FlagCount < uint32(6))
           select (ruleInfo.Id, ruleInfo.FixProg)} |> Seq.map id
 
 let mkCanonical lst = String.concat " " lst
@@ -313,8 +321,9 @@ let getPartialErrCandidateExamplesByKeyword cmd substrLen (keywords : string Lis
                 && err.WordCount >= uint32(substrLen)
                 && cmd.FirstWord = firstTok
                 && rEx.SubmitCount > uint32(2)
-                && (keywords.Contains(mapping.Keyword)))
-         select (cmd.Text, err.Text, fix.Text) 
+                && (keywords.Contains(mapping.Keyword))
+                && rEx.FlagCount < uint32(6))
+         select (rEx.Id, cmd.Text, err.Text, fix.Text) 
         } |> Seq.map id
 
 let getCandidatePartialExamples cmd err =
@@ -335,8 +344,9 @@ let getFullErrCandidateExamples cmd err =
           where (cmd.TxtHash = cmdHash
                  && err.TxtHash = errHash
                  && cmd.WordCount = uint32(cmdLen)
-                 && err.WordCount = uint32(errLen))
-          select (cmd.Text, err.Text, fix.Text)} |> Seq.map id
+                 && err.WordCount = uint32(errLen)
+                 && rEx.FlagCount < uint32(6))
+          select (rEx.Id, cmd.Text, err.Text, fix.Text)} |> Seq.map id
 
 let getSubstrRulesMatchingFirstCmdTok cmd err = 
     let cmdLen = List.length cmd in
@@ -358,12 +368,37 @@ let getEmptyErrRules cmd =
                    | 0 -> ""
                    | _ -> List.head cmd in
     query {for ruleInfo in ctx.Synthdb.Fixrule do
-           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.CmdName = firstTok)
+           where (ruleInfo.CmdLen = uint32(cmdLen) 
+                  && ruleInfo.CmdName = firstTok
+                  && ruleInfo.FlagCount < uint32(6))
            select (ruleInfo.Id, ruleInfo.FixProg)}
 
 let getEmptyErrRulesWithVarCmdName cmd =
     let cmdLen = List.length cmd in
     query {for ruleInfo in ctx.Synthdb.Fixrule do
-           where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.CmdName = "")
+           where (ruleInfo.CmdLen = uint32(cmdLen)
+                  && ruleInfo.CmdName = ""
+                  && ruleInfo.FlagCount < uint32(6))
            select (ruleInfo.Id, ruleInfo.FixProg)}
 
+let flagExample rexID =
+    ctx.Procedures.FlagExample.Invoke(rexID)
+
+let backPropToExamples ruleID =
+    let exampleIDs = query{for ruleInfo in ctx.Synthdb.Fixrule do
+                           join esInfo in ctx.Synthdb.Exampleset on (ruleInfo.Id = esInfo.RuleId)
+                           join rexInfo in ctx.Synthdb.Repairexample on (esInfo.CmdId = rexInfo.Id)
+                           where (ruleInfo.Id = uint32(ruleID))
+                           select (rexInfo.Id)} |> Seq.map id in
+    exampleIDs 
+    |> Seq.iter (flagExample >> ignore)
+
+let flagRule rID =
+    ctx.Procedures.FlagRule.Invoke(rID) |> ignore
+    backPropToExamples rID
+
+let flagInvocation invID =
+    ctx.Procedures.FlagInvocation.Invoke(invID)
+
+let upvoteExample rexID = 
+    ctx.Procedures.UpvoteExample.Invoke(rexID)
