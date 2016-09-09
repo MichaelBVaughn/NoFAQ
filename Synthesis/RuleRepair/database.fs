@@ -5,7 +5,7 @@ open System.Data
 open FSharp.Data.Sql
 
 [<Literal>]
-let connString = ""
+let connString = "Server=localhost;Database=synthdb;User=root;Password=o26baf!OMGPuppies"
 
 
 [<Literal>]
@@ -367,3 +367,27 @@ let getEmptyErrRulesWithVarCmdName cmd =
            where (ruleInfo.CmdLen = uint32(cmdLen) && ruleInfo.CmdName = "")
            select (ruleInfo.Id, ruleInfo.FixProg)}
 
+
+let dumpInvocations () =
+    query {for inv in ctx.Synthdb.Invocation do
+           join cmd in ctx.Synthdb.Command on (inv.CmdId = cmd.Id)
+           join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+           select (inv.Id, cmd.Text, err.Text, inv)} |> Seq.map id
+
+let dumpExamples () = 
+    query {for rEx in ctx.Synthdb.Repairexample do
+           join inv in ctx.Synthdb.Invocation on (rEx.InvocationId = inv.Id)
+           join cmd in ctx.Synthdb.Command on (inv.CmdId = cmd.Id)
+           join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+           join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+           select (rEx.Id, cmd.Text, err.Text, fix.Text, fix)}
+
+let dumpRules () = 
+    query {for rule in ctx.Synthdb.Fixrule do
+           join sMap in ctx.Synthdb.Exampleset on (rule.Id = sMap.RuleId)
+           join rEx in ctx.Synthdb.Repairexample on (sMap.CmdId = rEx.Id)
+           join inv in ctx.Synthdb.Invocation on (rEx.InvocationId = inv.Id)
+           join cmd in ctx.Synthdb.Command on (inv.CmdId = cmd.Id)
+           join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+           join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+           select (rule.Id, cmd.Text, err.Text, fix.Text)}

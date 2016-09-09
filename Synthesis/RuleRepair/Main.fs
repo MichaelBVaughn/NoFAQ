@@ -627,7 +627,6 @@ let testResponder = request(fun r-> setHeader "Access-Control-Allow-Origin" "*" 
 
 let responder  = choose [ GET >=> choose
                                   [path "/exSynth.ajax" >=> exSynthResponder
-                                   path "/upvote.ajax" >=> voteResponder
                                    path "/getOneUnfixed.ajax" >=> randUnfixedResponder
                                    path "/getRandEx.ajax" >=> randExampleResponder
                                    path "/test.ajax" >=> testResponder]
@@ -637,13 +636,39 @@ let responder  = choose [ GET >=> choose
 
 
 //TO DO: uncomment
+//[<EntryPoint>]
+//let main argv = 
+//    startWebServer cfg responder
+//    0
+
+
+open database
+open InputFiltering
+let invocationPred (_, cmd, err,_) = (profanityMatch cmd) || (profanityMatch err)
+let repairExamplePred (_,cmd,_,fix,_) = ((not <| rmMatch cmd) && (rmMatch fix)) || profanityMatch fix
+let rulePred (id,cmd,err,fix) = profanityMatch cmd || profanityMatch err || profanityMatch fix || ((not <| rmMatch cmd) && rmMatch fix)
+
 [<EntryPoint>]
-let main argv = 
-    startWebServer cfg responder
+let main argv =
+    printfn "--------------Invocations-------------------\n"
+    dumpInvocations() 
+    |> Seq.filter invocationPred 
+    |> Seq.iter (fun (id, cmd, err, _) -> printfn "%s: %s, %s\n" (id.ToString())  cmd err)
+    //|> Seq.iter (fun (_,_,_,inv) -> inv.Delete() |> (fun () -> ctx.SubmitUpdates() ))
+    printfn "--End of Invocations--\n"
+    printfn "------------Repair Examples----------------\n"
+    dumpExamples()
+    |> Seq.filter repairExamplePred
+    |> Seq.iter (fun (id, cmd, err, fix, rEx) -> printfn "%s: %s, %s, %s\n" (id.ToString()) cmd err fix)
+    //|> Seq.iter (fun (_,_,_,_,rEx) -> rEx.Delete() |> (fun () -> ctx.SubmitUpdates()))
+    printfn "--End of Examples--"
+    printfn "--------------Rules------------------------\n"
+    dumpRules()
+    |> Seq.filter rulePred
+    |> Seq.iter (fun (id, cmd, err, fix) -> printfn "%s: %s, %s, %s\n" (id.ToString()) cmd err fix)
+    printfn "--End of Rules--"
+    let s = Console.ReadLine() in
     0
-
-
-    
 
 //checkResults |> List.filter (fun (first,_,_) -> first > 1) |> List.map (fun (_,_,last) -> last) |> List.iter printStrList
 

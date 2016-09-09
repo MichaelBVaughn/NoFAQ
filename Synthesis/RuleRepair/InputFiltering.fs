@@ -12,11 +12,11 @@ let (|Regex|_|) pattern input =
 
 //[whitespace]rm([whitespace] [flag])*[whitespace](/ | /*)[whitespace* anchor | whitespace ;]
 //The resulting match group contains one or more Unix-style flag groups.
-let rmDestructive = "(?:;\s*|^\s*)rm((?:(?:\s+-\w+)|(?:\s+--(?:\w|-)+))*)\s+(?:\/|\/\*)(?:$|\s+;|\s+$)"
+let rmDestructive = "(?:.*;\s*|^\s*)(?:(?:sudo)(?:sdo)\s+)?(?:rm|\/bin/rm)((?:(?:\s+-\w+)|(?:\s+--(?:\w|-)+))*)\s+(?:\/|\/[\.\*]*)(?:$|\s*;|\s+$)"
 
 //Possibly over-restrictive and simultaneously nowhere near exhaustive, but should suffice for dissuading low-creativity trolls
 //With apologies/thanks to George Carlin.
-let profanity = "shit|piss|fuck|cunt|cocksucker|motherfucker|tits|twat"
+let profanity = "shit|piss|fuck|cunt|cock|tit|twat|penis"
 
 let isRecursiveFlag flag =
     match flag with 
@@ -45,3 +45,13 @@ let alertMatch str =
     | Regex rmDestructive [flags] -> analyzeFlags flags
     | Regex profanity _ -> true
     | _ -> false
+
+let rmMatch str =
+    match str with
+    | Regex rmDestructive [flags] -> analyzeFlags flags
+    | _ -> false
+
+let profanityMatch str =
+   match str with
+   | Regex profanity _ -> true
+   | _ -> false
