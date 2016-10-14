@@ -1,5 +1,5 @@
 # NoFAQ - A tool that learns to repair your command line mistakes
-# Copyright 2015-2016 Loris D'Antoni, Rishabh Singh, Michael Vaughn
+# Copyright 2015-2016 Loris D'Antoni, Michael Vaughn
 
 NoFAQ is a web application that uses synthesis techniques to iteratively learn to repair incorrect command line usage based on training examples which consist of triples of <incorrect command> <error message> <corrected command>. Details of the synthesis algorithm will be available in our publication.
 
