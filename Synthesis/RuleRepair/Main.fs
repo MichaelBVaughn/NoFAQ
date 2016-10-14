@@ -656,13 +656,41 @@ let responder  = choose [ GET >=> choose
 
 
 
-//TO DO: uncomment
-//[<EntryPoint>]
-//let main argv = 
-//    startWebServer cfg responder
-//    0
+(*
+[<EntryPoint>]
+let main argv = 
+    startWebServer cfg responder
+    0 *)
+open Topshelf
+open System
+open System.Threading
+[<EntryPoint>]
+let main argv =
+    let cancellationTokenSource = ref None
+    let start hc =
+        let cts = new CancellationTokenSource()
+        let token = cts.Token
+        let config = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083]; cancellationToken = token}
+        startWebServerAsync config responder
+        |> snd
+        |> Async.StartAsTask
+        |> ignore
 
-
+        cancellationTokenSource := Some cts
+        true
+          
+    let stop hc =
+        match !cancellationTokenSource with
+             | Some cts -> cts.Cancel()
+             | None -> ()
+        true
+    Service.Default
+    |> display_name "NoFAQ"
+    |> instance_name "NoFAQ"
+    |> with_start start
+    |> with_stop stop
+    |> run
+(*
 open database
 open InputFiltering
 let invocationPred (_, cmd, err,_) = (profanityMatch cmd) || (profanityMatch err)
@@ -690,6 +718,7 @@ let main argv =
     printfn "--End of Rules--"
     let s = Console.ReadLine() in
     0
+    *)
 
 //checkResults |> List.filter (fun (first,_,_) -> first > 1) |> List.map (fun (_,_,last) -> last) |> List.iter printStrList
 
