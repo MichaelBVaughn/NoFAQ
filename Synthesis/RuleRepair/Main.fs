@@ -445,8 +445,6 @@ let trySynthFixInternalOrig cmd err ruleQuery ruleEvaluator =
     |> Seq.filter  (snd >> Option.isSome) 
     |> Seq.map (sndMap Option.get) 
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
-    |> Seq.toArray 
 
 let cmdHasConst rule =
     let (FixRule(CmdParams pList, _, _, _)) = rule in
@@ -467,8 +465,6 @@ let trySynthFixInternalPartial cmd err ruleQuery =
                                  s) 
     |> Seq.concat
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
-    |> Seq.toArray
     
 let trySynthFixFull cmd err =
     trySynthFixInternalOrig cmd err getFullMatches evalTopLevelExpr
@@ -481,23 +477,21 @@ let trySynthFixFromExamplePartial cmd err =
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
     let potentialExamples = getCandidatePartialExamples symCmd symErr in
-    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (Seq.head b, a))
     potentialRules  
     |> Seq.map (sndMap (substringMatch symCmd symErr)) 
     |> Seq.map (fun (f, s) -> Seq.map 
                                  (fun x -> (f,x)) 
                                  s) 
     |> Seq.concat
-    |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id |> Seq.head |> (fun x -> x.ToString()); "fix", output; "fromExample", "true"]) 
-    |> Seq.toArray   
+    |> Seq.map (sndMap <| String.concat " ")  
 
 let trySynthFixFromExampleFull cmd err =
     let mappedCmd = deNBSPify cmd
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
     let potentialExamples = getFullErrCandidateExamples symCmd symErr in
-    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (b,a))
+    let potentialRules = potentialExamples |> makeSingleDBRules |> Seq.map (fun (a,b) -> (Seq.head b,a))
     potentialRules  
     |> Seq.map (sndMap (substringMatch symCmd symErr)) 
     |> Seq.map (fun (f, s) -> Seq.map 
@@ -505,8 +499,6 @@ let trySynthFixFromExampleFull cmd err =
                                  s) 
     |> Seq.concat
     |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id |> Seq.head |> (fun x -> x.ToString()); "fix", output; "fromExample", "true"]) 
-    |> Seq.toArray  
 
 let trySynthFixEmpty cmd err =
     let mappedCmd = deNBSPify cmd
@@ -524,9 +516,17 @@ let trySynthFixEmpty cmd err =
     |> Seq.map (sndMap evalFxn) 
     |> Seq.filter  (snd >> Option.isSome) 
     |> Seq.map (sndMap Option.get) 
-    |> Seq.map (sndMap <| String.concat " ") 
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", ""]) 
+    |> Seq.map (sndMap <| String.concat " ")
+     
+let SequenceToJson fromExample sequence =
+    let (fromExStr, storeFxn) = match fromExample with
+                                | true -> "true", incrMatchCountSingleton
+                                | _ -> "", incrMatchCountRule in
+    Seq.iter (fst >> storeFxn) sequence
+    sequence
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", fromExStr]) 
     |> Seq.toArray 
+    |> JsonConvert.SerializeObject 
 
 let errIsEmptyStr err =
     match err with
@@ -535,29 +535,35 @@ let errIsEmptyStr err =
 
 let tryExampleMatch cmd err =
     let fullMatches = trySynthFixFromExampleFull cmd err in
-    if Array.isEmpty fullMatches then
-       trySynthFixFromExamplePartial cmd err |> JsonConvert.SerializeObject
+    if Seq.isEmpty fullMatches then
+       let partialMatches = trySynthFixFromExamplePartial cmd err in
+       partialMatches
     else
-       JsonConvert.SerializeObject fullMatches
+       fullMatches
 
 let trySynthFix cmd err =
     let fullMatches = trySynthFixFull cmd err in
-    if Array.isEmpty fullMatches then
+    if Seq.isEmpty fullMatches then
        let symErr = strToSymbString (deNBSPify err) in
        if errIsEmptyStr symErr then
           let substrMatches = trySynthFixEmpty cmd err in
-          if Array.isEmpty substrMatches then
+          if Seq.isEmpty substrMatches then
              tryExampleMatch cmd err
+             |> SequenceToJson true
           else
-             JsonConvert.SerializeObject substrMatches   
+             substrMatches 
+             |> SequenceToJson false  
        else
           let substrMatches = trySynthFixSubstr cmd err in
-          if Array.isEmpty substrMatches then
+          if Seq.isEmpty substrMatches then
              tryExampleMatch cmd err
+             |> SequenceToJson true
           else
-             JsonConvert.SerializeObject substrMatches
+            substrMatches
+            |> SequenceToJson false
     else
-       JsonConvert.SerializeObject fullMatches
+       fullMatches
+       |> SequenceToJson false
 
 let tryAddEx id cmd err fix =
     let exID = System.UInt32.Parse id in
