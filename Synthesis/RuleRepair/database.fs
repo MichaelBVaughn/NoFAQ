@@ -215,6 +215,16 @@ let getExamples =
                join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
                select (rEx, invocation, cmd, err, fix)} |> Seq.map (fun (rEx, invocation, cmd,err,fix) -> (rEx.Id, cmd.Text, err.Text, fix.Text))
 
+let testGetExamples () =
+    query {for rEx in ctx.Synthdb.Repairexample do
+               where (rEx.SubmitCount > uint32(2)
+                      && rEx.FlagCount < uint32(6))
+               join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
+               join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
+               join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
+               join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+               select (rEx, invocation, cmd, err, fix)} |> Seq.map (fun (rEx, invocation, cmd,err,fix) -> (rEx.Id, cmd.Text, err.Text, fix.Text))
+
 let getRulesWithIDs =
     query {for ruleInfo in ctx.Synthdb.Fixrule do
                select ruleInfo} |> Seq.map (fun ruleInfo -> (ruleInfo.Id, ruleInfo.FixProg)) 
@@ -225,7 +235,7 @@ let getExampleSetIDs ruleID =
               where (exampleInfo.RuleId = ruleID) 
               select (exampleInfo.CmdId)} |> Seq.map id 
 
-let getRulesAndExamples =
+let getRulesAndExamples () =
     getRulesWithIDs |> Seq.map (fun (ruleID, fixProg) -> (fixProg, getExampleSetIDs ruleID))   
 
 let getFixRuleMatchingFirstCmdTok cmd err = 
@@ -344,7 +354,7 @@ let getFullErrCandidateExamples cmd err =
           where (cmd.TxtHash = cmdHash
                  && err.TxtHash = errHash
                  && cmd.WordCount = uint32(cmdLen)
-                 && err.WordCount = uint32(errLen)
+                 && err.WordCount = uint32(errLen) //TODO: add submit count check
                  && rEx.FlagCount < uint32(6))
           select (rEx.Id, cmd.Text, err.Text, fix.Text)} |> Seq.map id
 
@@ -426,3 +436,8 @@ let dumpRules () =
            join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
            join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
            select (rule.Id, cmd.Text, err.Text, fix.Text)}
+
+let getRuleWithID id =
+    query{ for rule in ctx.Synthdb.Fixrule do
+            where (rule.Id = id)
+            select rule.FixProg}

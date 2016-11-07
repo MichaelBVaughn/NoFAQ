@@ -291,9 +291,68 @@ let rulePickler = Pickler.auto<TopLevelExpr>
 let pickleRule r = Binary.pickle rulePickler r
 let unpickleRule r = Binary.unpickle rulePickler r
 
+let varPred (e : Expr) =
+    match e with
+    | Var (_,"","", _) -> true
+    | ConstStr _ -> false
+    | _ -> false
+
+let isConst (fxn : FixExpr) =
+    match fxn with
+    | FixConstStr _ -> true
+    | _ -> false
+
+let stripExpr e =
+    match e with
+    | ConstStr s -> ConstStr s
+    | VarEq (id, _) -> VarEq(id, [])
+    | Var (id, pref, suf, _) -> Var (id,pref,suf, [])
+
+let stripFixExpr e =
+    match e with
+    | FixConstStr s -> FixConstStr s
+    | FixFuncApp (r,_) -> FixFuncApp (r, [])
+
+let stripRule rule =
+    let (FixRule (CmdParams c, ErrContent e, FixCmdParams f, _)) = rule in
+    let cStripped = CmdParams (List.map stripExpr c) in
+    let eStripped = ErrContent (List.map stripExpr e) in
+    let fStripped = FixCmdParams (List.map stripFixExpr f) in
+    FixRule (cStripped, eStripped, fStripped, 0)
+
+let isDifferent oldRule newRule =
+    let old' = stripRule oldRule in
+    let new' = stripRule newRule in
+    not (old' = new')
+
+let ignoreEquiv oldRule newRule =
+    if Option.isSome newRule then
+        if isDifferent oldRule (Option.get newRule) then
+            newRule
+        else 
+            None
+    else
+        None
+    
+
+
+//Eliminates rules that map everything to a constant.
+let isTrivial rule =
+    let (FixRule (CmdParams c, ErrContent e, FixCmdParams f, _)) = rule in
+    let predCheck = List.exists varPred in
+    let cmdRes = predCheck c in
+    let errRes = lazy (predCheck e) in
+    let fixCheck = List.forall isConst in
+    let fixRes = lazy (fixCheck f)
+    cmdRes && errRes.Force() && errRes.Force()
+
 let updateRuleInfoSeq cmd err fix rSeq =
-    let tmp = rSeq |> Seq.map (fun (rule, exs) -> ((addNewExampleToRule cmd err fix rule), exs)) in
-    let tmp2 = tmp |> Seq.filter (fun (r,_) -> r <> None) |> Seq.map (fun (Some r, exs) -> (r, exs)) in
+    let tmp = rSeq |> Seq.map (fun (rule, exs) -> (addNewExampleToRule cmd err fix rule) |> ignoreEquiv rule
+                                                   , exs) in
+    let tmp2 = tmp 
+               |> Seq.filter (fun (r,_) -> Option.isSome r) 
+               |> Seq.map (fun (Some r, exs) -> (r, exs)) 
+               |> Seq.filter (fst >> isTrivial >> not) in
     tmp2
 
 let makeSingleDBRules (exSeq : (uint32 * string * string * string) seq) =
@@ -329,7 +388,7 @@ let addExample (cmd, err, fix) =
     let fixLen = uint32( List.length fix ) in
     let dbSingles = makeSingleDBRules (getExamples |> Seq.toList |> List.toSeq) in
     let exID = addBashExample cmd err fix in
-    let dbGroupRulesWithExamples = (getRulesAndExamples |> Seq.toList |> List.toSeq) |> Seq.map (fun (fp, exs) -> (unpickleRule fp, exs)) in
+    let dbGroupRulesWithExamples = getRulesAndExamples () |> Seq.map (fun (fp, exs) -> (unpickleRule fp, exs)) in
     let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles ; yield dbGroupRulesWithExamples})
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
@@ -351,7 +410,7 @@ let addExistingExampleToRules (exID, cmd, err, fix) =
     let fixLen = uint32( List.length fix ) in
     let filterCurr (id, _, _, _) = id <> exID in
     let dbSingles = makeSingleDBRules (getExamples |> Seq.filter filterCurr |> Seq.toList |> List.toSeq) in
-    let dbGroupRulesWithExamples = (getRulesAndExamples |> Seq.toList |> List.toSeq) |> Seq.map (fun (fp, exs) -> (unpickleRule fp, exs)) in
+    let dbGroupRulesWithExamples = getRulesAndExamples () |> Seq.map (fun (fp, exs) -> (unpickleRule fp, exs)) in
     let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles; yield dbGroupRulesWithExamples})
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
@@ -380,8 +439,11 @@ let filteredSeq = NewParseTestData (* varEqTestData *) |> Array.toList |> List.r
 let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |>  Seq.toList |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 )  |>*) getTestCases 
 //let testCases = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |>  Seq.toList |> List.filter (fun ((_,_,fix)::_) -> (String.concat " " fix) = "git stash"  ) |> getTestCases 
 let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun item -> (strToSymbString item.Cmd, strToSymbString item.Err, strToSymbString item.Fix))) |> Seq.map (List.rev) |> Seq.toList  |> (*List.filter (fun ((cmd,err,fix)::_) -> List.length cmd = 1 && List.length err = 6  && List.length fix = 1 ) |>*) getTrainingSets |> List.concat
-let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
+//let partResults = multirulePartitioning synthAlg trainingSet 0 |> Seq.map fst |> List.concat
 //Seq.iter addExample trainingSet
+
+
+
 
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
@@ -389,26 +451,6 @@ let dbResults = checkTestCases testCases dbRules
 let dbSuccesses = countSuccesses dbResults
 let dbFailures = getFailures dbRules testCases
 printfn "DB results: nonsingle rules: %d successes: %d failures: %d" (List.length dbRules)  dbSuccesses (List.length dbFailures)
-*)
-
-(*
-let rec processQueue () =
-    let newExamples = getQueuedExamples |> Seq.toList |> List.toSeq in
-    newExamples
-    |> Seq.map (fun (_, id, c,e,f) -> (id, c.Split [|' '|] |> Array.toList, e.Split [|' '|] |> Array.toList, f.Split [|' '|] |> Array.toList))
-    |> Seq.iter addExistingExampleToRules
-    newExamples
-
-let rec procLoop () =
-    let timer = new System.Timers.Timer(1000.0) //wait 30 seconds
-    let timerEvent = Async.AwaitEvent (timer.Elapsed) |> Async.Ignore
-    timer.Start()
-    Async.RunSynchronously timerEvent
-    let queued = processQueue ()
-    queued |> Seq.iter (fun (exId,_,_,_,_) -> deleteFromQueue exId)
-    procLoop ()
-
-procLoop ()
 *)
 
 let deNBSPify str =
@@ -577,9 +619,81 @@ let tryGetRandom () =
     let invAssoc = Map.ofList ["cmd", fst invPair; "err", snd invPair] in
     JsonConvert.SerializeObject invAssoc
 
+let getRelevantRules cmd err =
+    getFixRuleMatchingFirstCmdTok cmd err
+let ruleAdderI cmdLen errLen fixLen (r, exs) =
+    let len = Seq.length exs
+    addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, r, exs
 
-    
+let ruleAdder cmdLen errLen fixLen sequ =
+    Seq.map (ruleAdderI cmdLen errLen fixLen) sequ
 
+let testAddExistingExampleToRules initialRules (exID, cmd, err, fix) = 
+//    let ignored = printfn "add" in
+    let cmdLen = uint32( List.length cmd ) in
+    let errLen = uint32( List.length err ) in
+    let fixLen = uint32( List.length fix ) in
+    let filterCurr (id, _, _, _) = id <> exID in
+    let dbSingles = initialRules in
+    let dbGroupRulesWithExamples = Seq.concat(seq{yield getFixRuleMatchingFirstCmdTok cmd err; yield getFixRulesWithVarCmdName cmd err}) |> Seq.map (fstMap getExampleSetIDs)|> Seq.map (fun (exs, fp) -> (unpickleRule fp, exs)) in
+    let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles; yield dbGroupRulesWithExamples})
+    let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
+    updatedExamples
+    |> Seq.filter (fun (_,exs) -> ignoreSingleRule exID (Seq.toList exs))
+    //|> Seq.map (fun (r, exs) -> (addRuleFromIDs (pickleRule r) (getCmdName r) cmdLen errLen fixLen, r, exs ))
+    |> ruleAdder cmdLen errLen fixLen
+    |> Seq.map (fun (id, r, exs) -> (id, r, makeExampleSetFromIDs id exs))
+    |> Seq.map (fun (id, r, _) -> (id, updateKeywordMapping id r))
+    |> Seq.iter (fun (id,_) -> (addExampleToSet id exID) |> ignore)
+
+let testTryAddEx initialRules (id, cmd, err, fix) =
+    let exID = System.UInt32.Parse id in
+    let symCmd = strToSymbString (deNBSPify cmd) in
+    let symErr = strToSymbString (deNBSPify err) in
+    let symFix = strToSymbString (deNBSPify fix) in
+    let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+    testAddExistingExampleToRules initialRules (exID, symCmd, symErr, symFix)
+    let delta_t = stopwatch.Elapsed.TotalMilliseconds
+    delta_t
+let testMakeSingleDBRules initialRuleFxn (exSeq : (uint32 * string * string * string) seq) =
+     exSeq 
+     |> Seq.map (fun (id, c,e,f) -> (id, c.Split [|' '|] |> Array.toList, e.Split [|' '|] |> Array.toList, f.Split [|' '|] |> Array.toList))
+     |> Seq.map (fun (id, cmd, err, fix) -> ((initialRuleFxn cmd err fix), seq{ yield id }))
+
+let rand = new System.Random()
+
+let swap (a: _[]) x y =
+    let tmp = a.[x]
+    a.[x] <- a.[y]
+    a.[y] <- tmp
+
+// Fisher-Yates Shuffle, 
+let shuffle a =
+    Array.iteri (fun i _ -> swap a i (rand.Next(i, Array.length a))) a
+
+
+let write_times (times : float seq) (sw : StreamWriter) =
+    times |> Seq.iter (sprintf "%f" >> sw.WriteLine)
+
+let synthExperiment initialRuleFxn =
+    printfn "before experiment"
+    let exampleShuffle = testGetExamples () |> Seq.toArray 
+    shuffle exampleShuffle
+    let examples = exampleShuffle |> Array.toSeq |> Seq.map (fun (a,b,c,d) -> (a.ToString(), b, c, d)) |> Seq.toList |> List.toSeq //Force evaluation
+    let initialRules = testMakeSingleDBRules initialRuleFxn (testGetExamples () |> Seq.toList |> List.toSeq) in
+    let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+    let rec inf_concat s =  Seq.concat <| seq { yield s; yield inf_concat s} //Infinite concatenation of sequence s
+    let infiniteExamples = inf_concat examples
+    let synth_times = infiniteExamples |> Seq.take (Seq.length examples) |> Seq.map (testTryAddEx initialRules)
+    let writer = StreamWriter "times.txt"
+    write_times synth_times writer
+    writer.Close()
+//synthExperiment varRuleNew
+synthExperiment constRule
+printfn "Done."
+//let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
+let s = Console.ReadLine ()
+(*
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -655,12 +769,15 @@ let responder  = choose [ GET >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder]]
 
 
+*)
 
 (*
 [<EntryPoint>]
 let main argv = 
     startWebServer cfg responder
     0 *)
+
+    (*
 open Topshelf
 open System
 open System.Threading
@@ -690,6 +807,8 @@ let main argv =
     |> with_start start
     |> with_stop stop
     |> run
+    *)
+
 (*
 open database
 open InputFiltering
