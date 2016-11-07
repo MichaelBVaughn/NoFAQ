@@ -441,3 +441,16 @@ let getRuleWithID id =
     query{ for rule in ctx.Synthdb.Fixrule do
             where (rule.Id = id)
             select rule.FixProg}
+
+let incrMatchCountSingleton rexID =
+    ctx.Procedures.IncrMatchCountSingleton.Invoke(rexID) |> ignore
+
+
+let incrMatchCountRule ruleID =
+    ctx.Procedures.IncrMatchCountRule.Invoke(ruleID) |> ignore
+
+let incrMatchCountSingletonList ids =
+    ids |> Seq.map (fun x -> uint32(x)) |> Seq.map incrMatchCountSingleton |> ignore
+
+let incrMatchCountRuleList ids =
+    ids |> Seq.map (fun x -> uint32(x)) |> Seq.map incrMatchCountRule |> ignore
