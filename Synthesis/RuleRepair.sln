@@ -6,9 +6,6 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "RuleRepair", "RuleRepair\RuleRepair.fsproj", "{72C68006-3BFE-4CEA-BDF7-1FFF0712B8DF}"
 EndProject
 Global
-	GlobalSection(Performance) = preSolution
-		HasPerformanceSessions = true
-	EndGlobalSection
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Deploy|Any CPU = Deploy|Any CPU

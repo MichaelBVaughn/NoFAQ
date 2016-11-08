@@ -357,7 +357,10 @@ let updateRuleInfoSeq cmd err fix rSeq =
 
 let makeSingleDBRules (exSeq : (uint32 * string * string * string) seq) =
      exSeq 
-     |> Seq.map (fun (id, c,e,f) -> (id, c.Split [|' '|] |> Array.toList, e.Split [|' '|] |> Array.toList, f.Split [|' '|] |> Array.toList))
+     |> Seq.map (fun (id, c,e,f) -> (id, 
+                                     c.Split [|' '|] |> Array.toList, 
+                                     e.Split [|' '|] |> Array.toList, 
+                                     f.Split [|' '|] |> Array.toList))
      |> Seq.map (fun (id, cmd, err, fix) -> ((constRule cmd err fix), seq{ yield id }))
 
 let getCmdName (FixRule(CmdParams cMatch, _, _,_) : TopLevelExpr) =
@@ -560,15 +563,43 @@ let trySynthFixEmpty cmd err =
     |> Seq.map (sndMap Option.get) 
     |> Seq.map (sndMap <| String.concat " ")
      
-let SequenceToJson fromExample sequence =
+let FixSequenceToJson fromExample sequence =
     let (fromExStr, storeFxn) = match fromExample with
                                 | true -> "true", incrMatchCountSingleton
                                 | _ -> "", incrMatchCountRule in
     Seq.iter (fst >> storeFxn) sequence
     sequence
-    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", fromExStr]) 
+    |> Seq.map (fun (id, output) -> Map.ofList ["id", id.ToString(); "fix", output; "fromExample", fromExStr; "fixesFound", "true"]) 
     |> Seq.toArray 
-    |> JsonConvert.SerializeObject 
+    |> JsonConvert.SerializeObject
+    
+let SimilarExampleSequenceToJson sequence =
+    sequence
+    |> Seq.map (fun (id, cmd, err, fix, proximity) -> Map.ofList ["id", id.ToString(); 
+                                                                  "cmd", cmd; 
+                                                                  "err", err; 
+                                                                  "fix", fix; 
+                                                                  "proximity", proximity.ToString(); 
+                                                                  "fromExample", "true"; 
+                                                                  "fixesFound", ""]) 
+    |> Seq.toArray 
+    |> JsonConvert.SerializeObject
+
+(* In the case where synthesis fails, try to find similar repair examples which have been submitted 
+   For each example found, we count the number of tokens the command and example have in common.
+   The client sorts by these.*)
+let tryFindSimilarRepairExamples cmd err =
+    let symCmd = strToSymbString <| deNBSPify cmd in
+    let symErr = strToSymbString <| deNBSPify err in
+    let candidates = getSimilarExamples symCmd symErr in
+    let candidateCountMap = (fun f (id, cmd, err, fix) -> (id, cmd, err, fix, strToSymbString cmd |> f)) in
+    let projection (l,r) = match l = r with
+                           | true -> 1
+                           | false -> 0
+    let countProximity = Seq.sumBy projection in
+    candidates |> Seq.map (candidateCountMap 
+                                (Seq.zip symCmd
+                                 >> countProximity))
 
 let errIsEmptyStr err =
     match err with
@@ -590,22 +621,32 @@ let trySynthFix cmd err =
        if errIsEmptyStr symErr then
           let substrMatches = trySynthFixEmpty cmd err in
           if Seq.isEmpty substrMatches then
-             tryExampleMatch cmd err
-             |> SequenceToJson true
+             let exampleMatches = tryExampleMatch cmd err in
+             if Seq.isEmpty exampleMatches then
+                tryFindSimilarRepairExamples cmd err
+                |> SimilarExampleSequenceToJson
+             else
+             exampleMatches
+             |> FixSequenceToJson true
           else
              substrMatches 
-             |> SequenceToJson false  
+             |> FixSequenceToJson false  
        else
           let substrMatches = trySynthFixSubstr cmd err in
           if Seq.isEmpty substrMatches then
-             tryExampleMatch cmd err
-             |> SequenceToJson true
+             let exampleMatches = tryExampleMatch cmd err
+             if Seq.isEmpty exampleMatches then
+                tryFindSimilarRepairExamples cmd err
+                |> SimilarExampleSequenceToJson
+             else
+             exampleMatches
+             |> FixSequenceToJson true
           else
             substrMatches
-            |> SequenceToJson false
+            |> FixSequenceToJson false
     else
        fullMatches
-       |> SequenceToJson false
+       |> FixSequenceToJson false
 
 let tryAddEx id cmd err fix =
     let exID = System.UInt32.Parse id in
@@ -695,11 +736,11 @@ let synthExperiment initialRuleFxn =
     write_times synth_times writer
     writer.Close()
 //synthExperiment varRuleNew
-synthExperiment constRule
-printfn "Done."
+//synthExperiment constRule
+//printfn "Done."
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
-let s = Console.ReadLine ()
-(*
+//let s = Console.ReadLine ()
+
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -775,15 +816,15 @@ let responder  = choose [ GET >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder]]
 
 
-*)
+
 
 (*
 [<EntryPoint>]
 let main argv = 
     startWebServer cfg responder
-    0 *)
-
-    (*
+    0
+    *)
+    
 open Topshelf
 open System
 open System.Threading
@@ -813,7 +854,7 @@ let main argv =
     |> with_start start
     |> with_stop stop
     |> run
-    *)
+    
 
 (*
 open database

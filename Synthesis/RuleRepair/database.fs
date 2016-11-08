@@ -358,6 +358,26 @@ let getFullErrCandidateExamples cmd err =
                  && rEx.FlagCount < uint32(6))
           select (rEx.Id, cmd.Text, err.Text, fix.Text)} |> Seq.map id
 
+let getSimilarExamples cmd err =
+   let cmdLen = List.length cmd
+   let cmdHash = computeHashDigest cmd in
+   let substrLen = List.length err
+   let firstTok = List.head cmd
+   query{for cmd in ctx.Synthdb.Command do
+         join inv in ctx.Synthdb.Invocation on (cmd.Id = inv.CmdId)
+         join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+         join rEx in ctx.Synthdb.Repairexample on (inv.Id = rEx.InvocationId)
+         join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+         where (err.WordCount >= uint32(substrLen)
+                && cmd.FirstWord = firstTok
+                && rEx.SubmitCount > uint32(2)
+                && rEx.FlagCount < uint32(6))
+         sortByDescending rEx.SubmitCount
+         take 20 
+         select (rEx.Id, cmd.Text, err.Text, fix.Text)
+        } |> Seq.map id
+
+
 let getSubstrRulesMatchingFirstCmdTok cmd err = 
     let cmdLen = List.length cmd in
     let errLen = List.length err in
