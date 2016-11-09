@@ -1,5 +1,5 @@
-# How NoFAQ Works: A High-level Overview
-NoFAQ is a web app which helps users fix broken command line commands. If a user runs a command, and obtains an error message, they can enter their incorrect command and error message into NoFAQ, and request a fixed version. NoFAQ will present any fixes it has learned to the user. If NoFAQ was not able to fix the command, it will use the request to learn how to work better in the future. 
+# How [NoFAQ](https://nofaq.cs.wisc.edu "NoFAQ") Works: A High-level Overview
+[NoFAQ](https://nofaq.cs.wisc.edu "NoFAQ") is a web app which helps users fix broken command line commands. If a user runs a command, and obtains an error message, they can enter their incorrect command and error message into NoFAQ, and request a fixed version. NoFAQ will present any fixes it has learned to the user. If NoFAQ was not able to fix the command, it will use the request to learn how to work better in the future. 
 
 Users can also help teach NoFAQ how to fix commands via the "Help Fix Commands" tab. NoFAQ will present previously unrepaired commands to the user, and she can suggest one or more fixes. If the command does not appear to be repairable, she can also inform NoFAQ of this fact. 
 
@@ -8,6 +8,8 @@ In addition, users can view random examples of programs which NoFAQ knows how to
 ![alt text](./nofaq_demo1.gif "an example of NoFAQ workflows.")
 
 NoFAQ learns simple textual substitution programs which match and repair command line interactions. The domain-specific language we use to express NoFAQ rules is called FixIt. Despite providing a simple set of textual substitution operations, FixIt is still able to encode repair rules for a rich class of command line mistakes. 
+
+A more technical version of this account, including an in-depth description of NoFAQ/FixIt, and mathematical proofs of various language properties can be found in our paper on [arXiv](https://arxiv.org/abs/1608.08219 "arXiv").
 
 ## The Structure of FixIt Rules
 At the highest level, every FixIt rule has the structure 
@@ -47,7 +49,7 @@ cat /a/b/c
 cat: Permission denied.
 sudo cat /a/b/c
 ```
-NoFAQ will generalize the existing rule one that maps
+NoFAQ will generalize the existing rule to one that maps
 ```
 <command> <directory>
 <command>: Permission denied.
@@ -60,3 +62,5 @@ if CommandMatches( [Const("java"), VarWithSuffix(var-name="1", suffix=".java") ]
 and ErrorMatches( [Const("Could"), Const("not") ...<constants>... VarWithSuffix(var-name="2", suffix=".java")])
 then do MakeFix( [ Fix-Const("java"), Variable-Substring(var-name="1", from-start=0, from-end=-5) ])
 ```
+
+For more details, you can see our paper [here](https://arxiv.org/abs/1608.08219 "arxiv").
