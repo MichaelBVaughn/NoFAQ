@@ -675,6 +675,11 @@ let ruleAdderI cmdLen errLen fixLen (r, exs) =
 let ruleAdder cmdLen errLen fixLen sequ =
     Seq.map (ruleAdderI cmdLen errLen fixLen) sequ
 
+let tryRecordRequest cmd err =
+    let adjustedCmd = deNBSPify cmd in
+    let adjustedErr = deNBSPify err in
+    updateRequestRecord adjustedCmd adjustedErr
+    
 let testAddExistingExampleToRules initialRules (exID, cmd, err, fix) = 
 //    let ignored = printfn "add" in
     let cmdLen = uint32( List.length cmd ) in
@@ -802,6 +807,13 @@ let flagExampleResponder =  request(fun r -> setHeader "Access-Control-Allow-Ori
                                                                                                   | Choice1Of2 id -> flagExample(System.UInt32.Parse id) |> ignore |> (fun () -> "Flagged.")
                                                                                                   | _ -> "an error occured at routing"))
 
+
+let recordRequestResponder = request(fun r -> setHeader "Access-Control-Allow-Origin" "*" >=>  OK (match (r.queryParam "cmd", r.queryParam "err") with
+                                                                                                  | Choice1Of2 cmd, Choice1Of2 err -> tryRecordRequest cmd err |> ignore |> (fun () -> "Record Updated.")
+                                                                                                  | _ -> "an error occured at routing"))
+
+                                                                                                
+
 let responder  = choose [ GET >=> choose
                                   [path "/exSynth.ajax" >=> exSynthResponder
                                    path "/upvoteRule.ajax" >=> upvoteRuleResponder
@@ -811,20 +823,22 @@ let responder  = choose [ GET >=> choose
                                    path "/flagRule.ajax" >=> flagRuleResponder
                                    path "/flagInvocation.ajax" >=> flagInvocationResponder
                                    path "/flagExample.ajax" >=> flagExampleResponder
-                                   path "/test.ajax" >=> testResponder]
+                                   path "/test.ajax" >=> testResponder
+                                   path "/recordRequest.ajax" >=> recordRequestResponder]
                           POST >=> choose
-                                  [path "/reqFix.ajax" >=> reqFixResponder]]
+                                  [path "/reqFix.ajax" >=> reqFixResponder
+                                    ]]
 
 
 
 
-(*
+
 [<EntryPoint>]
 let main argv = 
     startWebServer cfg responder
     0
-    *)
-    
+
+  (*  
 open Topshelf
 open System
 open System.Threading
@@ -853,7 +867,7 @@ let main argv =
     |> instance_name "NoFAQ"
     |> with_start start
     |> with_stop stop
-    |> run
+    |> run *)
     
 
 (*
