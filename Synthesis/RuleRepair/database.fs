@@ -474,3 +474,8 @@ let incrMatchCountSingletonList ids =
 
 let incrMatchCountRuleList ids =
     ids |> Seq.map (fun x -> uint32(x)) |> Seq.map incrMatchCountRule |> ignore
+
+let updateRequestRecord cmd err =
+    let cmdhash = md5 cmd in
+    let errhash = md5 err in
+    ctx.Procedures.UpdateRequestRecord.Invoke(cmdhash, errhash, cmd, err)
