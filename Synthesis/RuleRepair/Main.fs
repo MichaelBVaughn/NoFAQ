@@ -341,7 +341,9 @@ let isTrivial rule =
     let (FixRule (CmdParams c, ErrContent e, FixCmdParams f, _)) = rule in
     let predCheck = List.exists varPred in
     let cmdRes = predCheck c in
-    let errRes = lazy (predCheck e) in
+    let errRes = match e with
+                 | [ConstStr("")] -> lazy( true )
+                 | _ -> lazy (predCheck e) in
     let fixCheck = List.forall isConst in
     let fixRes = lazy (fixCheck f)
     cmdRes && errRes.Force() && errRes.Force()
@@ -740,12 +742,12 @@ let synthExperiment initialRuleFxn =
     let writer = StreamWriter "times.txt"
     write_times synth_times writer
     writer.Close()
-//synthExperiment varRuleNew
+synthExperiment varRuleNew
 //synthExperiment constRule
-//printfn "Done."
+printfn "Done."
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
-//let s = Console.ReadLine ()
-
+let s = Console.ReadLine ()
+(*
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -836,7 +838,7 @@ let responder  = choose [ GET >=> choose
 [<EntryPoint>]
 let main argv = 
     startWebServer cfg responder
-    0
+    0 *)
 
   (*  
 open Topshelf

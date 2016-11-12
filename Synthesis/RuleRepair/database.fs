@@ -217,8 +217,7 @@ let getExamples =
 
 let testGetExamples () =
     query {for rEx in ctx.Synthdb.Repairexample do
-               where (rEx.SubmitCount > uint32(2)
-                      && rEx.FlagCount < uint32(6))
+               where (rEx.FlagCount < uint32(6))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
                join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
