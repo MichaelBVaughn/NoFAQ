@@ -746,6 +746,35 @@ let synthExperiment initialRuleFxn =
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
 //let s = Console.ReadLine ()
 
+let getAntichainExamples () =
+    let exampleLists = getRulesAndExamples () |> Seq.map (fun (_,b) -> b) |> Seq.toList in
+    let exampleSets = exampleLists |> List.map Set.ofSeq in
+    let rec getTops lst =
+            match lst with
+            | hd::tl -> if List.exists (fun x -> Set.isProperSubset hd x) tl then
+                            getTops tl
+                        else hd::(getTops tl)
+            | [] -> [] in
+    getTops exampleSets
+
+let exampleSets = getAntichainExamples ()
+//for set in exampleSets do
+//    for id in set do
+//        printfn "-%i" id
+//printfn "-------"
+let exampleSetsAsLists = exampleSets |> List.map Set.toList |> List.map (List.map debugGetExample)
+printfn "%i" <| List.length exampleSets
+let mutable idx = 0
+for exampleList in exampleSetsAsLists do
+    printfn "rule %i" idx
+    idx <- idx + 1;
+    for exampleSeq in exampleList do
+        for example in exampleSeq do
+            printfn "%s" example
+let s = Console.ReadLine ()
+
+
+
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -824,21 +853,22 @@ let responder  = choose [ GET >=> choose
                                    path "/flagInvocation.ajax" >=> flagInvocationResponder
                                    path "/flagExample.ajax" >=> flagExampleResponder
                                    path "/test.ajax" >=> testResponder
-                                   path "/recordRequest.ajax" >=> recordRequestResponder]
+                                   ]
                           POST >=> choose
                                   [path "/reqFix.ajax" >=> reqFixResponder
+                                   path "/recordRequest.ajax" >=> recordRequestResponder
                                     ]]
 
 
 
 
-
+(*
 [<EntryPoint>]
 let main argv = 
     startWebServer cfg responder
-    0
-
-  (*  
+    0 
+  *)  
+(*    
 open Topshelf
 open System
 open System.Threading
@@ -867,8 +897,7 @@ let main argv =
     |> instance_name "NoFAQ"
     |> with_start start
     |> with_stop stop
-    |> run *)
-    
+    |> run*)
 
 (*
 open database

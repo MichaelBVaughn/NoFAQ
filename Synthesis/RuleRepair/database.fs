@@ -207,7 +207,7 @@ let makeExampleSetFromIDs ruleId idList =
 
 let getExamples =
     query {for rEx in ctx.Synthdb.Repairexample do
-               where (rEx.SubmitCount > uint32(2)
+               where (rEx.SubmitCount >= uint32(2)
                       && rEx.FlagCount < uint32(6))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
@@ -217,7 +217,7 @@ let getExamples =
 
 let testGetExamples () =
     query {for rEx in ctx.Synthdb.Repairexample do
-               where (rEx.SubmitCount > uint32(2)
+               where (rEx.SubmitCount >= uint32(2)
                       && rEx.FlagCount < uint32(6))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
@@ -330,7 +330,7 @@ let getPartialErrCandidateExamplesByKeyword cmd substrLen (keywords : string Lis
                 && cmd.TxtHash = cmdHash
                 && err.WordCount >= uint32(substrLen)
                 && cmd.FirstWord = firstTok
-                && rEx.SubmitCount > uint32(2)
+                && rEx.SubmitCount >= uint32(2)
                 && (keywords.Contains(mapping.Keyword))
                 && rEx.FlagCount < uint32(6))
          select (rEx.Id, cmd.Text, err.Text, fix.Text) 
@@ -370,7 +370,7 @@ let getSimilarExamples cmd err =
          join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
          where (err.WordCount >= uint32(substrLen)
                 && cmd.FirstWord = firstTok
-                && rEx.SubmitCount > uint32(2)
+                && rEx.SubmitCount >= uint32(2)
                 && rEx.FlagCount < uint32(6))
          sortByDescending rEx.SubmitCount
          take 20 
@@ -479,3 +479,14 @@ let updateRequestRecord cmd err =
     let cmdhash = md5 cmd in
     let errhash = md5 err in
     ctx.Procedures.UpdateRequestRecord.Invoke(cmdhash, errhash, cmd, err)
+
+
+let debugGetExample idx =
+    let results = query{for rEx in ctx.Synthdb.Repairexample do
+          join inv in ctx.Synthdb.Invocation on (rEx.InvocationId = inv.Id)
+          join cmd in ctx.Synthdb.Command on (inv.CmdId = cmd.Id)
+          join err in ctx.Synthdb.Output on (inv.OutId = err.Id)
+          join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
+          where (rEx.Id = idx)
+          select (cmd.Text, err.Text, fix.Text)} in 
+     results |> Seq.map( (fun (a,b,c) -> a + " " + b + " " +  c ) ) 
