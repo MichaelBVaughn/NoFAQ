@@ -217,13 +217,20 @@ let getExamples =
 
 let testGetExamples () =
     query {for rEx in ctx.Synthdb.Repairexample do
-               where (rEx.SubmitCount >= uint32(2)
-                      && rEx.FlagCount < uint32(6))
+               where (rEx.FlagCount < uint32(6))
                join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
                join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
                join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
                join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id)
                select (rEx, invocation, cmd, err, fix)} |> Seq.map (fun (rEx, invocation, cmd,err,fix) -> (rEx.Id, cmd.Text, err.Text, fix.Text))
+let testGetExample id =
+    query {for rEx in ctx.Synthdb.Repairexample do
+               where (rEx.FlagCount < uint32(6) && rEx.Id = id)
+               join invocation in ctx.Synthdb.Invocation on (rEx.InvocationId = invocation.Id)
+               join cmd in ctx.Synthdb.Command on (invocation.CmdId = cmd.Id)
+               join err in ctx.Synthdb.Output on (invocation.OutId = err.Id)
+               join fix in ctx.Synthdb.Fix on (rEx.FixId = fix.Id) 
+               select (rEx, invocation, cmd, err, fix)} |> Seq.map (fun (rEx, invocation, cmd,err,fix) -> (rEx.Id, cmd.Text, err.Text, fix.Text)) |> Seq.head
 
 let getRulesWithIDs =
     query {for ruleInfo in ctx.Synthdb.Fixrule do

@@ -323,7 +323,7 @@ let stripRule rule =
 let isDifferent oldRule newRule =
     let old' = stripRule oldRule in
     let new' = stripRule newRule in
-    not (old' = new')
+    not (old' = new') 
 
 let ignoreEquiv oldRule newRule =
     if Option.isSome newRule then
@@ -332,7 +332,7 @@ let ignoreEquiv oldRule newRule =
         else 
             None
     else
-        None
+        None 
     
 
 
@@ -349,7 +349,7 @@ let isTrivial rule =
     cmdRes && errRes.Force() && errRes.Force()
 
 let updateRuleInfoSeq cmd err fix rSeq =
-    let tmp = rSeq |> Seq.map (fun (rule, exs) -> (addNewExampleToRule cmd err fix rule) |> ignoreEquiv rule
+    let tmp = rSeq |> Seq.map (fun (rule, exs) -> (addNewExampleToRule cmd err fix rule)  |> ignoreEquiv rule
                                                    , exs) in
     let tmp2 = tmp 
                |> Seq.filter (fun (r,_) -> Option.isSome r) 
@@ -448,8 +448,53 @@ let trainingSet = filteredSeq |> Seq.map Array.toList |> Seq.map (List.map (fun 
 //Seq.iter addExample trainingSet
 
 
+let deNBSPify str =
+    let nbsp = 160 in
+    let mapFxn c = if int(c) = nbsp then ' ' else c
+    String.map mapFxn str |> (fun s -> s.Trim(' '))
 
+let base_cmd1 = "java file.java"
+let base_cmd2 = "java another.java"
 
+let base_err  = ""
+
+let base_fix1 = "java file"
+let base_fix2 = "java another"
+
+let mutable cur_cmd1 = base_cmd1
+let mutable cur_cmd2 = base_cmd2
+let mutable cur_err1 = base_err
+let mutable cur_err2 = base_err
+let mutable cur_fix1 = base_fix1
+let mutable cur_fix2 = base_fix2
+(*
+let initialRuleFxn = constRule
+let exp_writer = StreamWriter "len_timings_const.txt"
+let stopwatch = System.Diagnostics.Stopwatch.StartNew()
+for i in 1..100 do
+    let symCmd1 = strToSymbString (deNBSPify cur_cmd1) 
+    let symErr1 = strToSymbString (deNBSPify cur_err1)
+    let symFix1 = strToSymbString (deNBSPify cur_fix1) 
+    let new_const = initialRuleFxn symCmd1 symErr1 symFix1 
+
+    let symCmd2 = strToSymbString (deNBSPify cur_cmd2)
+    let symErr2 = strToSymbString (deNBSPify cur_err2)
+    let symFix2 = strToSymbString (deNBSPify cur_fix2)
+    stopwatch.Restart()
+    addNewExampleToRule symCmd2 symErr2 symFix2 new_const |> ignore
+    let delta_t = stopwatch.Elapsed.TotalMilliseconds
+    sprintf "%f" delta_t |> exp_writer.WriteLine
+    cur_cmd1 <- cur_cmd1 + base_cmd1
+    cur_err1 <- cur_err1 + base_err
+    cur_fix1 <- cur_fix1 + base_fix1
+    cur_cmd2 <- cur_cmd2 + base_cmd2
+    cur_err2 <- cur_err2 + base_err
+    cur_fix2 <- cur_fix2 + base_fix2
+
+printfn "Done."
+exp_writer.Close()
+let s' = Console.ReadLine () 
+*)
 (*
 let dbRules = getRulesWithIDs |> Seq.map snd |> Seq.map unpickleRule |> Seq.toList
 let dbResults = checkTestCases testCases dbRules
@@ -458,10 +503,7 @@ let dbFailures = getFailures dbRules testCases
 printfn "DB results: nonsingle rules: %d successes: %d failures: %d" (List.length dbRules)  dbSuccesses (List.length dbFailures)
 *)
 
-let deNBSPify str =
-    let nbsp = 160 in
-    let mapFxn c = if int(c) = nbsp then ' ' else c
-    String.map mapFxn str |> (fun s -> s.Trim(' '))
+
 
 open Newtonsoft.Json
 
@@ -689,7 +731,7 @@ let testAddExistingExampleToRules initialRules (exID, cmd, err, fix) =
     let fixLen = uint32( List.length fix ) in
     let filterCurr (id, _, _, _) = id <> exID in
     let dbSingles = initialRules in
-    let dbGroupRulesWithExamples = Seq.concat(seq{yield getFixRuleMatchingFirstCmdTok cmd err; yield getFixRulesWithVarCmdName cmd err}) |> Seq.map (fstMap getExampleSetIDs)|> Seq.map (fun (exs, fp) -> (unpickleRule fp, exs)) in
+    let dbGroupRulesWithExamples = Seq.concat(seq{yield getFixRuleMatchingFirstCmdTok cmd err; yield getFixRulesWithVarCmdName cmd err}) |> Seq.map (fstMap getExampleSetIDs)|> Seq.filter (fst >> (fun x -> Seq.length x < 5)) |>  Seq.map (fun (exs, fp) -> (unpickleRule fp, exs)) in
     let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles; yield dbGroupRulesWithExamples})
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
@@ -701,7 +743,7 @@ let testAddExistingExampleToRules initialRules (exID, cmd, err, fix) =
     |> Seq.iter (fun (id,_) -> (addExampleToSet id exID) |> ignore)
 
 let testTryAddEx initialRules (id, cmd, err, fix) =
-    let exID = System.UInt32.Parse id in
+    let exID = id in
     let symCmd = strToSymbString (deNBSPify cmd) in
     let symErr = strToSymbString (deNBSPify err) in
     let symFix = strToSymbString (deNBSPify fix) in
@@ -709,12 +751,11 @@ let testTryAddEx initialRules (id, cmd, err, fix) =
     testAddExistingExampleToRules initialRules (exID, symCmd, symErr, symFix)
     let delta_t = stopwatch.Elapsed.TotalMilliseconds
     delta_t
-let testMakeSingleDBRules initialRuleFxn (exSeq : (uint32 * string * string * string) seq) =
-     exSeq 
-     |> Seq.map (fun (id, c,e,f) -> (id, c.Split [|' '|] |> Array.toList, e.Split [|' '|] |> Array.toList, f.Split [|' '|] |> Array.toList))
-     |> Seq.map (fun (id, cmd, err, fix) -> ((initialRuleFxn cmd err fix), seq{ yield id }))
+let testMakeSingleDBRule initialRuleFxn ((id : uint32), (cmd : string), (err : string),  (fix : string))  = 
+     (id, cmd.Split [|' '|] |> Array.toList, err.Split [|' '|] |> Array.toList, fix.Split [|' '|] |> Array.toList)
+     |> (fun (id, cmd, err, fix) -> ((initialRuleFxn cmd err fix), seq{ yield id }))
 
-let rand = new System.Random()
+let rand = new System.Random(1138418)
 
 let swap (a: _[]) x y =
     let tmp = a.[x]
@@ -729,54 +770,66 @@ let shuffle a =
 let write_times (times : float seq) (sw : StreamWriter) =
     times |> Seq.iter (sprintf "%f" >> sw.WriteLine)
 
+//let ids14 = List.map uint32 <| [5131; 5145; 5141; 5133; 5147; 5146; 5148; 5135; 5144; 5143; 5220; 5142; 5140; 5139; 5138; 5134; 5136; 5130; 5132; 5137]
+//let ids13 = List.map uint32 <| [5130; 5140; 5137; 5141; 5146; 5138; 5143; 5132; 5136; 5131; 5142; 5144; 5135; 5147; 5134; 5220; 5145; 5133; 5139; 5148]
 let synthExperiment initialRuleFxn =
     printfn "before experiment"
     let exampleShuffle = testGetExamples () |> Seq.toArray 
+    //let exampleShuffle = List.map testGetExample ids14 |> Seq.toArray
     shuffle exampleShuffle
-    let examples = exampleShuffle |> Array.toSeq |> Seq.map (fun (a,b,c,d) -> (a.ToString(), b, c, d)) |> Seq.toList |> List.toSeq //Force evaluation
-    let initialRules = testMakeSingleDBRules initialRuleFxn (testGetExamples () |> Seq.toList |> List.toSeq) in
+    let examples = exampleShuffle |> Array.toSeq  //Force evaluation
     let stopwatch = System.Diagnostics.Stopwatch.StartNew()
     let rec inf_concat s =  Seq.concat <| seq { yield s; yield inf_concat s} //Infinite concatenation of sequence s
     let infiniteExamples = inf_concat examples
-    let synth_times = infiniteExamples |> Seq.take (Seq.length examples) |> Seq.map (testTryAddEx initialRules)
+    let accFxn (times, singletons, idx) (example : uint32 * string * string * string) =
+        let newTime = testTryAddEx singletons example in
+        let newSingleton = testMakeSingleDBRule initialRuleFxn example in
+        (newTime :: times, newSingleton :: singletons, idx + 1)
+    let expRes = infiniteExamples |> Seq.take (Seq.length examples) |> Seq.fold accFxn ([], [], 0)
+    let synth_times = (fun (a,_,_) -> a) expRes |> List.rev
     let writer = StreamWriter "times.txt"
     write_times synth_times writer
     writer.Close()
-synthExperiment varRuleNew
-//synthExperiment constRule
+
+
+
+//synthExperiment varRuleNew
+synthExperiment constRule
 printfn "Done."
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
-//let s = Console.ReadLine ()
+
+let s = Console.ReadLine ()
 
 let getAntichainExamples () =
     let exampleLists = getRulesAndExamples () |> Seq.map (fun (_,b) -> b) |> Seq.toList in
     let exampleSets = exampleLists |> List.map Set.ofSeq in
     let rec getTops lst =
             match lst with
-            | hd::tl -> if List.exists (fun x -> Set.isProperSubset hd x) tl then
+            | hd::tl -> if List.exists (fun x -> (Set.isProperSubset hd x)) exampleSets then
                             getTops tl
                         else hd::(getTops tl)
             | [] -> [] in
     getTops exampleSets
-
+    
 let exampleSets = getAntichainExamples ()
 //for set in exampleSets do
 //    for id in set do
 //        printfn "-%i" id
 //printfn "-------"
-let exampleSetsAsLists = exampleSets |> List.map Set.toList |> List.map (List.map debugGetExample)
+let exampleSetsAsLists = exampleSets |> List.map Set.toList |> List.map (List.map (fun x -> (x, String.concat " " <| debugGetExample x)))
 printfn "%i" <| List.length exampleSets
 let mutable idx = 0
+let writer = StreamWriter "sets.txt"
 for exampleList in exampleSetsAsLists do
-    printfn "rule %i" idx
+    sprintf "rule %i" idx |> writer.WriteLine
     idx <- idx + 1;
-    for exampleSeq in exampleList do
-        for example in exampleSeq do
-            printfn "%s" example
-let s = Console.ReadLine ()
+    for x, example in exampleList do
+        ((x |> sprintf "%i ") + example) |> writer.WriteLine
+
+let s' = Console.ReadLine () 
 
 
-
+(*
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -861,7 +914,7 @@ let responder  = choose [ GET >=> choose
                                    path "/recordRequest.ajax" >=> recordRequestResponder
                                     ]]
 
-
+*)
 
 
 (*
