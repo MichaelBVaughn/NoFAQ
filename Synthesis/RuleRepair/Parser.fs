@@ -36,7 +36,7 @@ type TopLevelExpr = FixRule of CmdMatch * ErrMatch * FixCmd * int //The last par
 let strToSymbString (str:string) = str.Split( (null : char []), StringSplitOptions.RemoveEmptyEntries) 
                                    |> Array.toList
                                    |> (fun l -> match l with 
-                                                      | [] -> [""]
+                                                      | [] -> []
                                                       | _ -> l)
 let strToConstStr(str:string) = List.map (fun s -> ConstStr(s)) (strToSymbString str)
 

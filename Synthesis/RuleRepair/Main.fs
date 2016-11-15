@@ -333,20 +333,18 @@ let ignoreEquiv oldRule newRule =
             None
     else
         None 
-    
-
 
 //Eliminates rules that map everything to a constant.
 let isTrivial rule =
     let (FixRule (CmdParams c, ErrContent e, FixCmdParams f, _)) = rule in
-    let predCheck = List.exists varPred in
+    let predCheck = List.forall varPred in
     let cmdRes = predCheck c in
     let errRes = match e with
-                 | [ConstStr("")] -> lazy( true )
-                 | _ -> lazy (predCheck e) in
+                 | [] -> true
+                 | _ -> predCheck e in
     let fixCheck = List.forall isConst in
-    let fixRes = lazy (fixCheck f)
-    cmdRes && errRes.Force() && errRes.Force()
+    let fixRes = fixCheck f
+    cmdRes && errRes && fixRes
 
 let updateRuleInfoSeq cmd err fix rSeq =
     let tmp = rSeq |> Seq.map (fun (rule, exs) -> (addNewExampleToRule cmd err fix rule)  |> ignoreEquiv rule
@@ -360,9 +358,9 @@ let updateRuleInfoSeq cmd err fix rSeq =
 let makeSingleDBRules (exSeq : (uint32 * string * string * string) seq) =
      exSeq 
      |> Seq.map (fun (id, c,e,f) -> (id, 
-                                     c.Split [|' '|] |> Array.toList, 
-                                     e.Split [|' '|] |> Array.toList, 
-                                     f.Split [|' '|] |> Array.toList))
+                                     c.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries )|> Array.toList, 
+                                     e.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList, 
+                                     f.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList))
      |> Seq.map (fun (id, cmd, err, fix) -> ((constRule cmd err fix), seq{ yield id }))
 
 let getCmdName (FixRule(CmdParams cMatch, _, _,_) : TopLevelExpr) =
@@ -647,7 +645,7 @@ let tryFindSimilarRepairExamples cmd err =
 
 let errIsEmptyStr err =
     match err with
-    | hd::[] -> hd = ""
+    | [] -> true
     | _ -> false
 
 let tryExampleMatch cmd err =
@@ -660,37 +658,34 @@ let tryExampleMatch cmd err =
 
 let trySynthFix cmd err =
     let fullMatches = trySynthFixFull cmd err in
-    if Seq.isEmpty fullMatches then
-       let symErr = strToSymbString (deNBSPify err) in
-       if errIsEmptyStr symErr then
-          let substrMatches = trySynthFixEmpty cmd err in
-          if Seq.isEmpty substrMatches then
-             let exampleMatches = tryExampleMatch cmd err in
-             if Seq.isEmpty exampleMatches then
-                tryFindSimilarRepairExamples cmd err
-                |> SimilarExampleSequenceToJson
-             else
-             exampleMatches
-             |> FixSequenceToJson true
-          else
-             substrMatches 
-             |> FixSequenceToJson false  
-       else
-          let substrMatches = trySynthFixSubstr cmd err in
-          if Seq.isEmpty substrMatches then
-             let exampleMatches = tryExampleMatch cmd err
-             if Seq.isEmpty exampleMatches then
-                tryFindSimilarRepairExamples cmd err
-                |> SimilarExampleSequenceToJson
-             else
-             exampleMatches
-             |> FixSequenceToJson true
-          else
-            substrMatches
-            |> FixSequenceToJson false
+    let symErr = strToSymbString (deNBSPify err) in
+    if errIsEmptyStr symErr then
+      let substrMatches = trySynthFixEmpty cmd err in
+      if Seq.isEmpty fullMatches && Seq.isEmpty substrMatches then
+        let exampleMatches = tryExampleMatch cmd err in
+        if Seq.isEmpty exampleMatches then
+          tryFindSimilarRepairExamples cmd err
+          |> SimilarExampleSequenceToJson
+        else
+          exampleMatches
+          |> FixSequenceToJson true
+      else
+        Seq.concat (seq{ yield fullMatches; yield substrMatches }) 
+        |> FixSequenceToJson false  
     else
-       fullMatches
-       |> FixSequenceToJson false
+      let substrMatches = trySynthFixSubstr cmd err in
+      if Seq.isEmpty fullMatches && Seq.isEmpty substrMatches then
+        let exampleMatches = tryExampleMatch cmd err
+        if Seq.isEmpty exampleMatches then
+          tryFindSimilarRepairExamples cmd err
+          |> SimilarExampleSequenceToJson
+        else
+          exampleMatches
+          |> FixSequenceToJson true
+      else
+        Seq.concat (seq{ yield fullMatches; yield substrMatches} )
+        |> FixSequenceToJson false
+
 
 let tryAddEx id cmd err fix =
     let exID = System.UInt32.Parse id in
@@ -731,7 +726,7 @@ let testAddExistingExampleToRules initialRules (exID, cmd, err, fix) =
     let fixLen = uint32( List.length fix ) in
     let filterCurr (id, _, _, _) = id <> exID in
     let dbSingles = initialRules in
-    let dbGroupRulesWithExamples = Seq.concat(seq{yield getFixRuleMatchingFirstCmdTok cmd err; yield getFixRulesWithVarCmdName cmd err}) |> Seq.map (fstMap getExampleSetIDs)|> Seq.filter (fst >> (fun x -> Seq.length x < 5)) |>  Seq.map (fun (exs, fp) -> (unpickleRule fp, exs)) in
+    let dbGroupRulesWithExamples = Seq.concat(seq{yield getFixRuleMatchingFirstCmdTok cmd err; yield getFixRulesWithVarCmdName cmd err}) |> Seq.map (fstMap getExampleSetIDs)|> (*Seq.filter (fst >> (fun x -> Seq.length x < 5)) |>*)  Seq.map (fun (exs, fp) -> (unpickleRule fp, exs)) in
     let dbRulesWithExamples = Seq.concat (seq{ yield dbSingles; yield dbGroupRulesWithExamples})
     let updatedExamples = dbRulesWithExamples |> updateRuleInfoSeq cmd err fix in 
     updatedExamples
@@ -752,7 +747,9 @@ let testTryAddEx initialRules (id, cmd, err, fix) =
     let delta_t = stopwatch.Elapsed.TotalMilliseconds
     delta_t
 let testMakeSingleDBRule initialRuleFxn ((id : uint32), (cmd : string), (err : string),  (fix : string))  = 
-     (id, cmd.Split [|' '|] |> Array.toList, err.Split [|' '|] |> Array.toList, fix.Split [|' '|] |> Array.toList)
+     (id, cmd.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList, 
+          err.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList, 
+          fix.Split ([|' '|], StringSplitOptions.RemoveEmptyEntries) |> Array.toList)
      |> (fun (id, cmd, err, fix) -> ((initialRuleFxn cmd err fix), seq{ yield id }))
 
 let rand = new System.Random(1138418)
@@ -769,6 +766,7 @@ let shuffle a =
 
 let write_times (times : float seq) (sw : StreamWriter) =
     times |> Seq.iter (sprintf "%f" >> sw.WriteLine)
+
 
 //let ids14 = List.map uint32 <| [5131; 5145; 5141; 5133; 5147; 5146; 5148; 5135; 5144; 5143; 5220; 5142; 5140; 5139; 5138; 5134; 5136; 5130; 5132; 5137]
 //let ids13 = List.map uint32 <| [5130; 5140; 5137; 5141; 5146; 5138; 5143; 5132; 5136; 5131; 5142; 5144; 5135; 5147; 5134; 5220; 5145; 5133; 5139; 5148]
@@ -797,39 +795,38 @@ let synthExperiment initialRuleFxn =
 synthExperiment constRule
 printfn "Done."
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
-
-let s = Console.ReadLine ()
-
-let getAntichainExamples () =
-    let exampleLists = getRulesAndExamples () |> Seq.map (fun (_,b) -> b) |> Seq.toList in
-    let exampleSets = exampleLists |> List.map Set.ofSeq in
-    let rec getTops lst =
-            match lst with
-            | hd::tl -> if List.exists (fun x -> (Set.isProperSubset hd x)) exampleSets then
-                            getTops tl
-                        else hd::(getTops tl)
-            | [] -> [] in
-    getTops exampleSets
-    
-let exampleSets = getAntichainExamples ()
-//for set in exampleSets do
-//    for id in set do
-//        printfn "-%i" id
-//printfn "-------"
-let exampleSetsAsLists = exampleSets |> List.map Set.toList |> List.map (List.map (fun x -> (x, String.concat " " <| debugGetExample x)))
-printfn "%i" <| List.length exampleSets
-let mutable idx = 0
-let writer = StreamWriter "sets.txt"
-for exampleList in exampleSetsAsLists do
-    sprintf "rule %i" idx |> writer.WriteLine
-    idx <- idx + 1;
-    for x, example in exampleList do
-        ((x |> sprintf "%i ") + example) |> writer.WriteLine
-
+//
+//let s = Console.ReadLine ()
+//let getAntichainExamples () =
+//    let exampleLists = getRulesAndExamples () |> Seq.map (fun (_,b) -> b) |> Seq.toList in
+//    let exampleSets = exampleLists |> List.map Set.ofSeq in
+//    let rec getTops lst =
+//            match lst with
+//            | hd::tl -> if List.exists (fun x -> (Set.isProperSubset hd x)) exampleSets then
+//                            getTops tl
+//                        else hd::(getTops tl)
+//            | [] -> [] in
+//    getTops exampleSets
+//    
+//let exampleSets = getAntichainExamples ()
+////for set in exampleSets do
+////    for id in set do
+////        printfn "-%i" id
+////printfn "-------"
+//let exampleSetsAsLists = exampleSets |> List.map Set.toList |> List.map (List.map (fun x -> (x, String.concat " " <| debugGetExample x)))
+//printfn "%i" <| List.length exampleSets
+//let mutable idx = 0
+//let writer = StreamWriter "sets.txt"
+//for exampleList in exampleSetsAsLists do
+//    sprintf "rule %i" idx |> writer.WriteLine
+//    idx <- idx + 1;
+//    for x, example in exampleList do
+//        ((x |> sprintf "%i ") + example) |> writer.WriteLine
+//
 let s' = Console.ReadLine () 
 
 
-(*
+
 open Suave
 open Suave.Web
 open Suave.Filters
@@ -914,45 +911,45 @@ let responder  = choose [ GET >=> choose
                                    path "/recordRequest.ajax" >=> recordRequestResponder
                                     ]]
 
-*)
 
 
-(*
-[<EntryPoint>]
-let main argv = 
-    startWebServer cfg responder
-    0 *)
 
-  (*  
-open Topshelf
-open System
-open System.Threading
-[<EntryPoint>]
-let main argv =
-    let cancellationTokenSource = ref None
-    let start hc =
-        let cts = new CancellationTokenSource()
-        let token = cts.Token
-        let config = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083]; cancellationToken = token}
-        startWebServerAsync config responder
-        |> snd
-        |> Async.StartAsTask
-        |> ignore
-
-        cancellationTokenSource := Some cts
-        true
-          
-    let stop hc =
-        match !cancellationTokenSource with
-             | Some cts -> cts.Cancel()
-             | None -> ()
-        true
-    Service.Default
-    |> display_name "NoFAQ"
-    |> instance_name "NoFAQ"
-    |> with_start start
-    |> with_stop stop
-    |> run*)
+//
+//[<EntryPoint>]
+//let main argv = 
+//    startWebServer cfg responder
+//    0 
+    
+//
+//open Topshelf
+//open System
+//open System.Threading
+//[<EntryPoint>]
+//let main argv =
+//    let cancellationTokenSource = ref None
+//    let start hc =
+//        let cts = new CancellationTokenSource()
+//        let token = cts.Token
+//        let config = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083]; cancellationToken = token}
+//        startWebServerAsync config responder
+//        |> snd
+//        |> Async.StartAsTask
+//        |> ignore
+//
+//        cancellationTokenSource := Some cts
+//        true
+//          
+//    let stop hc =
+//        match !cancellationTokenSource with
+//             | Some cts -> cts.Cancel()
+//             | None -> ()
+//        true
+//    Service.Default
+//    |> display_name "NoFAQ"
+//    |> instance_name "NoFAQ"
+//    |> with_start start
+//    |> with_stop stop
+//    |> run
 
 (*
 open database
