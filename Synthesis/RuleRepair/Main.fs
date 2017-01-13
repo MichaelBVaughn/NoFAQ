@@ -792,8 +792,8 @@ let synthExperiment initialRuleFxn =
 
 
 //synthExperiment varRuleNew
-synthExperiment constRule
-printfn "Done."
+//synthExperiment constRule
+//printfn "Done."
 //let rule = unpickleRule <| Seq.head (getRuleWithID (uint32 158621)) 
 //
 //let s = Console.ReadLine ()
@@ -823,7 +823,7 @@ printfn "Done."
 //    for x, example in exampleList do
 //        ((x |> sprintf "%i ") + example) |> writer.WriteLine
 //
-let s' = Console.ReadLine () 
+//let s' = Console.ReadLine () 
 
 
 
@@ -913,43 +913,43 @@ let responder  = choose [ GET >=> choose
 
 
 
-
+//
 //
 //[<EntryPoint>]
 //let main argv = 
 //    startWebServer cfg responder
 //    0 
     
-//
-//open Topshelf
-//open System
-//open System.Threading
-//[<EntryPoint>]
-//let main argv =
-//    let cancellationTokenSource = ref None
-//    let start hc =
-//        let cts = new CancellationTokenSource()
-//        let token = cts.Token
-//        let config = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083]; cancellationToken = token}
-//        startWebServerAsync config responder
-//        |> snd
-//        |> Async.StartAsTask
-//        |> ignore
-//
-//        cancellationTokenSource := Some cts
-//        true
-//          
-//    let stop hc =
-//        match !cancellationTokenSource with
-//             | Some cts -> cts.Cancel()
-//             | None -> ()
-//        true
-//    Service.Default
-//    |> display_name "NoFAQ"
-//    |> instance_name "NoFAQ"
-//    |> with_start start
-//    |> with_stop stop
-//    |> run
+
+open Topshelf
+open System
+open System.Threading
+[<EntryPoint>]
+let main argv =
+    let cancellationTokenSource = ref None
+    let start hc =
+        let cts = new CancellationTokenSource()
+        let token = cts.Token
+        let config = { defaultConfig with bindings = [ HttpBinding.mkSimple HTTP "0.0.0.0" 8083]; cancellationToken = token}
+        startWebServerAsync config responder
+        |> snd
+        |> Async.StartAsTask
+        |> ignore
+
+        cancellationTokenSource := Some cts
+        true
+          
+    let stop hc =
+        match !cancellationTokenSource with
+             | Some cts -> cts.Cancel()
+             | None -> ()
+        true
+    Service.Default
+    |> display_name "NoFAQ"
+    |> instance_name "NoFAQ"
+    |> with_start start
+    |> with_stop stop
+    |> run
 
 (*
 open database

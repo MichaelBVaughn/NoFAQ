@@ -42,6 +42,103 @@ let strToConstStr(str:string) = List.map (fun s -> ConstStr(s)) (strToSymbString
 
 let str s = pstring s
 
+let py_indent = "    "
+let indent_block = List.map (fun s -> py_indent + s)
+let makeMatchPred matchElem =
+    let get_tok = "cur_list.pop()"
+    match matchElem with
+    | ConstStr s -> let pred = sprintf "if tok != \"%s\":" s in
+                    let block = py_indent + "return None" in
+                    [pred; block]
+    | Var (i, pre, suf, _) -> let pred = sprintf "if tok.startswith(\"%s\") and tok.endswith(\"%s\"):" pre suf in
+                              let true_block =  py_indent  + sprintf "var_dict[%i] = tok" i in
+                              let else_ln = "else:" in
+                              let false_block = py_indent + sprintf "return None" in
+                              [pred; true_block; else_ln; false_block]
+    | VarEq (i, _) -> let pred = sprintf "if tok != var_dict[%i]:" i in
+                      let block = py_indent + "return None" in
+                      [pred; block]
+
+let makeMatchLines cMatch eMatch =
+    let matchHead = "def match(command):" in
+    let setupErr1 = py_indent + "err_list = command.stderr.split()"
+    let setupCmd1 = py_indent + "cmd_list = list(command.script_parts)"
+    let checkELen = py_indent + sprintf "if len(err_list) != %i:"  (List.length eMatch)
+    let ELenBlock = py_indent + py_indent + "return False"
+    let checkCLen = py_indent + sprintf "if len(cmd_list) != %i:" (List.length cMatch)
+    let CLenBlock = py_indent + py_indent + "return False"
+    let setupList1 = py_indent + "cur_list = err_list"
+    let errMatch = List.rev eMatch |> List.map makeMatchPred |> List.concat |> indent_block in
+    let setupList2 = py_indent + "cur_list = cmd_list"
+    let cmdMatch = List.rev cMatch |> List.map makeMatchPred |> List.concat |> indent_block in
+    [matchHead; setupErr1; setupCmd1; checkELen; ELenBlock; checkCLen; CLenBlock; setupList1] @ errMatch @ [setupList2] @ cmdMatch
+
+let makeMatchFxn cMatch eMatch =
+    makeMatchLines cMatch eMatch
+
+
+let nthFromEnd ="""
+def nthFromEnd(tok, target_c, n):
+    count = 0
+    for idx in range(-1,-(len(s) + 1),-1):
+        if tok[idx] == target_c:
+            if count == n:
+                return (idx, True)
+            count += 1
+    return (0,False)
+"""
+
+let nthFromStart ="""
+def nthFromStart(tok, target_c, n):
+   count = 1
+   for idx in range(0,len(s)):
+       if tok[idx] == target_c:
+           if count == n:
+               return (len(s) + idx - 1, True)
+           count += 1
+   return (0,False)
+"""
+
+let getPosLine posVar pExpr = 
+   match pExpr with
+   | CPos(i) -> sprintf "%s = %i" posVar i
+   | SymPos (c, instance, offset) ->
+       if offset > 0 then
+           sprintf "%s = nthFromStart(tok, %c, %i) + %i" posVar c instance offset
+       else
+           sprintf "%s = nthFromEnd(tok, %c, %i) + %i" posVar c instance offset
+let makeStrOp (SubstrAndAppend ((((i,j) :: _), left, right) :: _)) idx =
+    let lPosExp = getPosLine "lPos" i in
+    let rPosExp = getPosLine "rPos" j in
+    let repairExp = sprintf "repairedTok = %s + var_dict[%i][lPos:rPos] + %s" left idx right in
+    let updateLine = "repairedToks.append(repairedTok)" in
+    [lPosExp; rPosExp; repairExp; updateLine]
+    
+
+let makeFixTerm fExpr = 
+    match fExpr with
+    | (FixConstStr s) -> [sprintf "repairedToks.append(\"%s\")" s] 
+    | (FixFuncApp (((fxn, idx) :: _), _)) -> makeStrOp fxn idx
+
+let makeFixFxn fCmd =
+    let fixHead = "def get_new_command(command):" in
+    let fixDecl = py_indent + "repairedCmd = []"
+    let fixLines = List.map makeFixTerm fCmd |> List.concat |> indent_block in 
+    let returnFix = py_indent + "return \" \".join(fixLines)" in
+    (fixHead  :: fixDecl :: (fixLines @ [returnFix]))
+//Make thefuck rules from FixIt rules.
+let makeTheFRuleLines (FixRule (CmdParams cMatch, ErrContent eMatch, FixCmdParams fCmd, _)) =
+    (makeMatchFxn cMatch eMatch, makeFixFxn fCmd)
+
+let makeTheFRule expr =
+    let dict_decl = "var_dict = {}" in
+    let enable = "enabled_by_default = True" in
+    let priority = "priority = 1000" in
+    let req_out = "requires_output = True" in
+    let (matchLines, fixLines) = makeTheFRuleLines expr in
+    let ruleText = [dict_decl; enable; priority; req_out] @ (matchLines @ fixLines) in
+    String.concat "\n" ruleText
+
 //let pipe7 p1 p2 p3 p4 p5 p6 p7 f =
 //    pipe4 p1 p2 p3 (tuple4 p4 p5 p6 p7)
 //          (fun x1 x2 x3 (x4, x5, x6, x7) -> f x1 x2 x3 x4 x5 x6 x7)
